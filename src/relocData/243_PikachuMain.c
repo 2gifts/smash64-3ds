@@ -22,6 +22,9 @@ extern u8 dPikachuShieldPose_shield_anim_joint_7[];
 extern u32 dPikachuMainMotion_Idle_0x0010[];
 extern u32 dPikachuSpecial1_ThunderJoltAir_WeaponAttributes[];
 #include <ft/fttypes.h>
+#include <wp/wptypes.h>  // WPAttributes
+#include <gm/gmsound.h>  // nSYAudioFGM*
+#include <gm/gmdef.h>    // nGMHitElement*
 
 extern DObjDesc dPikachuModel_JointTree[];
 extern DObjDesc dPikachuModel_JointTree_0x5490[];
@@ -50,38 +53,74 @@ extern u16 dPikachuModel_palette_0x9930[];
 extern DObjDesc dPikachuSpecial2_UnkDObjDesc[];
 
 /* Pre-attributes data (263 words, 0x041C bytes) */
-/* @ 0x0000, 116 bytes: FTAttributes.file_handles target (was dPikachuMain_pre+0x0) */
-u32 dPikachuMain_file_handles[29] = {
+/* @ 0x0000, 12 bytes: 3 cross-file handle pointers (chain-rewritten). */
+void *dPikachuMain_file_handles[3] = {
 
-	(u32)&dPikachuMainMotion_Idle_0x0010, /* extern -> 0x0010 */
-	(u32)&dPikachuSpecial2_UnkDObjDesc, /* extern -> 0x0800 */
-	(u32)&dPikachuSpecial1_ThunderJoltAir_WeaponAttributes, /* extern -> 0x0000 */
-	(u32)&dPikachuModel_ThunderTrailDObjDesc, /* extern -> 0x95B0 */
-	(u32)&dPikachuModel_ThunderTrailMObjSub_MObjSub, /* extern -> 0x9420 */
-	0x00000000,
-	0x00000000,
-	0x000000E1,
-	0x00000000,
-	0x00000000,
-	0x00640000,
-	0xFF9C0032,
-	0x00641180,
-	0x0C830800,
-	0x0140B9C0,
-	0x14000000,
-	(u32)&dPikachuModel_ThunderTrailDObjDesc, /* extern -> 0x95B0 */
-	(u32)&dPikachuModel_ThunderTrailMObjSub_MObjSub, /* extern -> 0x9420 */
-	0x00000000,
-	0x00000000,
-	0x000000F0,
-	0x00000000,
-	0xFF100000,
-	0x00E10000,
-	0xFF1F004B,
-	0x01901180,
-	0x0C830800,
-	0x0180B984,
-	0x14000000,
+	(void *)&dPikachuMainMotion_Idle_0x0010, /* extern -> 0x0010 */
+	(void *)&dPikachuSpecial2_UnkDObjDesc, /* extern -> 0x0800 */
+	(void *)&dPikachuSpecial1_ThunderJoltAir_WeaponAttributes, /* extern -> 0x0000 */
+};
+
+/* @ 0x000C, 52 bytes: WPAttributes for the Thunder head projectile (the bolt tip).
+ * Referenced from wp/wppikachu/wppikachuthunder.c via llPikachuMainThunderHeadWeaponAttributes (0x0C). */
+WPAttributes dPikachuMain_ThunderHeadWeaponAttributes = {
+	(void *)&dPikachuModel_ThunderTrailDObjDesc,             /* data */
+	(MObjSub ***)&dPikachuModel_ThunderTrailMObjSub_MObjSub, /* p_mobjsubs */
+	NULL,                                                    /* anim_joints */
+	NULL,                                                    /* p_matanim_joints */
+	{ { 0, 225, 0 }, { 0, 0, 0 } },                          /* attack_offsets */
+	100, 0, -100, 50,                                        /* map_coll top/center/bottom/width */
+	100,                   /* size             : 16 */
+	70,                    /* angle            : 10 */
+	50,                    /* knockback_scale  : 10 */
+	12,                    /* damage           :  8 */
+	nGMHitElementElectric, /* element          :  4 */
+	0,                     /* knockback_weight : 10 */
+	1,                     /* shield_damage    :  8 */
+	1,                     /* attack_count     :  2 */
+	0,                     /* can_setoff       :  1 */
+	nSYAudioFGMShockM,     /* sfx              : 10 */
+	1,                     /* priority         :  3 */
+	1,                     /* can_rehit_item   :  1 */
+	1,                     /* can_rehit_fighter:  1 */
+	0,                     /* can_hop          :  1 */
+	0,                     /* can_reflect      :  1 */
+	0,                     /* can_absorb       :  1 */
+	0,                     /* can_shield       :  1 */
+	0,                     /* unused_0x2F_b6   :  1 */
+	0,                     /* unused_0x2F_b7   :  1 */
+	80,                    /* knockback_base   : 10 */
+};
+
+/* @ 0x0040, 52 bytes: WPAttributes for the Thunder trail (the vertical bolt column).
+ * Referenced from wp/wppikachu/wppikachuthunder.c via llPikachuMainThunderTrailWeaponAttributes (0x40). */
+WPAttributes dPikachuMain_ThunderTrailWeaponAttributes = {
+	(void *)&dPikachuModel_ThunderTrailDObjDesc,             /* data */
+	(MObjSub ***)&dPikachuModel_ThunderTrailMObjSub_MObjSub, /* p_mobjsubs */
+	NULL,                                                    /* anim_joints */
+	NULL,                                                    /* p_matanim_joints */
+	{ { 0, 240, 0 }, { 0, -240, 0 } },                       /* attack_offsets */
+	225, 0, -225, 75,                                        /* map_coll top/center/bottom/width */
+	400,                   /* size             : 16 */
+	70,                    /* angle            : 10 */
+	50,                    /* knockback_scale  : 10 */
+	12,                    /* damage           :  8 */
+	nGMHitElementElectric, /* element          :  4 */
+	0,                     /* knockback_weight : 10 */
+	1,                     /* shield_damage    :  8 */
+	2,                     /* attack_count     :  2 */
+	0,                     /* can_setoff       :  1 */
+	nSYAudioFGMShockM,     /* sfx              : 10 */
+	1,                     /* priority         :  3 */
+	1,                     /* can_rehit_item   :  1 */
+	0,                     /* can_rehit_fighter:  1 */
+	0,                     /* can_hop          :  1 */
+	0,                     /* can_reflect      :  1 */
+	0,                     /* can_absorb       :  1 */
+	1,                     /* can_shield       :  1 */
+	0,                     /* unused_0x2F_b6   :  1 */
+	0,                     /* unused_0x2F_b7   :  1 */
+	80,                    /* knockback_base   : 10 */
 };
 
 /* @ 0x0074, 8 bytes: FTAttributes.animlock target (was dPikachuMain_pre+0x74) */

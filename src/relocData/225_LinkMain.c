@@ -26,6 +26,10 @@ extern void *dLinkModel_data_0x110A8[];
 extern void *dLinkModel_data_0x11A40[];
 extern AObjEvent32 *dLinkSpecial2_SpinAttackMatAnimJoint_MatAnimJoint_data_at_0x698[];
 #include <ft/fttypes.h>
+#include <wp/wptypes.h>  // WPAttributes
+#include <it/ittypes.h>  // ITAttributes, ITAttackEvent
+#include <gm/gmsound.h>  // nSYAudioFGM*
+#include <gm/gmdef.h>    // nGMHitElement*
 
 extern Gfx dLinkBoomerangModel_Joint_0x00F8_DisplayList[];
 extern u32 dLinkMainMotion_EggLay_0x0014[];
@@ -92,101 +96,115 @@ extern DObjDesc dLinkSpecial2_EntryWaveDObjDesc[];
 extern DObjDesc dLinkSpecial2_SpinAttackDObjDesc[];
 
 /* Pre-attributes data (450 words, 0x0708 bytes) */
-/* @ 0x0000, 192 bytes: FTAttributes.file_handles target (was dLinkMain_pre+0x0) */
-u32 dLinkMain_file_handles[48] = {
+/* @ 0x0000, 12 bytes: 3 cross-file handle pointers (chain-rewritten). */
+void *dLinkMain_file_handles[3] = {
 
-	(u32)&dLinkMainMotion_EggLay_0x0014, /* extern -> 0x0014 */
-	(u32)&dLinkSpecial2_EntryWaveDObjDesc, /* extern -> 0x03F8 */
-	(u32)&dLinkSpecial1_Boomerang_WeaponAttributes, /* extern -> 0x0000 */
-	(u32)dLinkModel_DObjDesc_0x11908, /* extern -> 0x11908 */
-	(u32)dLinkModel_data_0x110A8, /* extern -> 0x110A8 */
-	(u32)dLinkModel_data_0x11990, /* extern -> 0x11990 */
-	(u32)dLinkModel_data_0x11A40, /* extern -> 0x11A40 */
-	0x00000000,
-	0x00000000,
-	0x00000000,
-	0x00960000,
-	0xFF6A0096,
-	0x01900780,
-	0x0C814000,
+	(void *)&dLinkMainMotion_EggLay_0x0014, /* extern -> 0x0014 */
+	(void *)&dLinkSpecial2_EntryWaveDObjDesc, /* extern -> 0x03F8 */
+	(void *)&dLinkSpecial1_Boomerang_WeaponAttributes, /* extern -> 0x0000 */
+};
+
+/* @ 0x000C, 52 bytes: WPAttributes for the Spin Attack slash effect.
+ * Referenced from wp/wplink/wplinkspinattack.c via llLinkMainSpinAttackWeaponAttributes (0x0C). */
+WPAttributes dLinkMain_SpinAttackWeaponAttributes = {
+	(void *)dLinkModel_DObjDesc_0x11908,      /* data */
+	(MObjSub ***)dLinkModel_data_0x110A8,     /* p_mobjsubs */
+	(AObjEvent32 **)dLinkModel_data_0x11990,  /* anim_joints */
+	(AObjEvent32 ***)dLinkModel_data_0x11A40, /* p_matanim_joints */
+	{ { 0, 0, 0 }, { 0, 0, 0 } },             /* attack_offsets */
+	150, 0, -150, 150,                        /* map_coll top/center/bottom/width */
+	400,                  /* size             : 16 */
+	30,                   /* angle            : 10 */
+	50,                   /* knockback_scale  : 10 */
+	5,                    /* damage           :  8 */
+	nGMHitElementNormal,  /* element          :  4 */
+	0,                    /* knockback_weight : 10 */
+	1,                    /* shield_damage    :  8 */
+	2,                    /* attack_count     :  2 */
+	1,                    /* can_setoff       :  1 */
+	nSYAudioFGMKickM,     /* sfx              : 10 */
+	1,                    /* priority         :  3 */
+	1,                    /* can_rehit_item   :  1 */
+	0,                    /* can_rehit_fighter:  1 */
+	0,                    /* can_hop          :  1 */
+	0,                    /* can_reflect      :  1 */
+	0,                    /* can_absorb       :  1 */
+	1,                    /* can_shield       :  1 */
+	0,                    /* unused_0x2F_b6   :  1 */
+	0,                    /* unused_0x2F_b7   :  1 */
+	30,                   /* knockback_base   : 10 */
+};
+
+/* @ 0x0040, 72 bytes: ITAttributes for Link's Bomb (the held/thrown item).
+ * Referenced from it/itfighter/itlinkbomb.c via llLinkMainBombItemAttributes (0x40). */
+ITAttributes dLinkMain_BombItemAttributes = {
+	(void *)dLinkSpecial2_SpinAttackMatAnimJoint_MatAnimJoint_data_at_0x5E0,        /* data */
+	NULL,                                                                           /* p_mobjsubs */
+	(AObjEvent32 **)dLinkSpecial2_SpinAttackMatAnimJoint_MatAnimJoint_data_at_0x698, /* anim_joints */
+	NULL,                                                                           /* p_matanim_joints */
+	1, 0, 1, 1, 1,     /* xlu,dobjs,colanim,hitlag,weight */
+	0, 0, 0,           /* attack_offset0 x/y/z */
+	0, 0, 0,           /* attack_offset1 x/y/z */
+	{ 0, 0, 0 },       /* damage_coll_offset */
+	{ 100, 100, 100 }, /* damage_coll_size */
+	113, 0, -113, 113, /* map_coll top/center/bottom/width */
+	220,               /* size */
+	80,                /* angle */
 #if defined(REGION_JP)
-	0x01A0F984,
+	65,                /* knockback_scale */
+	1,                 /* damage */
 #else
-	0x01A10184,
+	20,                /* knockback_scale */
+	2,                 /* damage */
 #endif
-	0x07800000,
-	(u32)dLinkSpecial2_SpinAttackMatAnimJoint_MatAnimJoint_data_at_0x5E0, /* extern -> 0x18D8 */
-	0x00000000,
-	(u32)dLinkSpecial2_SpinAttackMatAnimJoint_MatAnimJoint_data_at_0x698, /* extern -> 0x1990 */
-	0x00000000,
-	0xB8000000,
-	0x00000000,
-	0x00000000,
-	0x00000000,
-	0x00000000,
-	0x00640064,
-	0x00640071,
-	0x0000FF8F,
-	0x007100DC,
+	nGMHitElementNormal, /* element */
+	0,                 /* knockback_weight */
+	0,                 /* shield_damage */
+	1,                 /* attack_count */
+	0,                 /* can_setoff */
+	nSYAudioFGMKickM,  /* hit_sfx */
+	1,                 /* priority */
+	0,                 /* can_rehit_item */
+	0,                 /* can_rehit_fighter */
+	1,                 /* can_hop */
+	1,                 /* can_reflect */
+	1,                 /* can_shield */
 #if defined(REGION_JP)
-	0x14041010,
+	10,                /* knockback_base */
 #else
-	0x14014020,
+	60,                /* knockback_base */
 #endif
+	3,                 /* type */
+	0,                 /* hitstatus */
+	0,                 /* unk_atca_0x3C_b6 */
+	0,                 /* unk_atca_0x3C_b7 */
+	nSYAudioFGMItemThrow, /* drop_sfx */
+	nSYAudioFGMItemThrow, /* throw_sfx */
+	nSYAudioFGMItemThrow, /* smash_sfx */
+	60,                /* vel_scale */
+	0,                 /* spin_speed */
+};
+
+/* @ 0x0088, 32 bytes: ITAttackEvent[4] for the Bomb explosion (shrinking hitbox).
+ * Referenced from it/itfighter/itlinkbomb.c via llLinkMainBombAttackEvents (0x88). */
+ITAttackEvent dLinkMain_BombAttackEvents[4] = {
 #if defined(REGION_JP)
-	0x0000103E,
+	{ 0, 361, 8, 350 },
+	{ 2, 361, 6, 250 },
+	{ 4, 361, 4, 150 },
+	{ 6, 361, 1, 0 },
 #else
-	0x00001040,
+	{ 0, 361, 5, 300 },
+	{ 2, 361, 5, 230 },
+	{ 4, 361, 5, 150 },
+	{ 6, 361, 5, 0 },
 #endif
-#if defined(REGION_JP)
-	0x27028C00,
-#else
-	0x270F0C00,
-#endif
-#if defined(REGION_JP)
-	0x0D4350D4,
-#else
-	0x0E4390E4,
-#endif
-	0x1E000000,
-#if defined(REGION_JP)
-	0x005A4200,
-#else
-	0x005A4140,
-#endif
-#if defined(REGION_JP)
-	0x015E0000,
-#else
-	0x012C0000,
-#endif
-#if defined(REGION_JP)
-	0x025A4180,
-#else
-	0x025A4140,
-#endif
-#if defined(REGION_JP)
-	0x00FA0000,
-#else
-	0x00E60000,
-#endif
-#if defined(REGION_JP)
-	0x045A4100,
-#else
-	0x045A4140,
-#endif
-	0x00960000,
-#if defined(REGION_JP)
-	0x065A4040,
-#else
-	0x065A4140,
-#endif
-	0x00000000,
-	0x3F4CCCCD,
-	0x3F800000,
-	0x3F99999A,
-	0x3FB33333,
-	0x3FCCCCCD,
-	0x3FE66666,
+};
+
+/* @ 0x00A8, 24 bytes: f32[6] model scale ramp for the Bomb's pre-explosion bloat.
+ * Referenced from it/itfighter/itlinkbomb.c via llLinkMainBombBloatScales (0xA8). */
+f32 dLinkMain_BombBloatScales[6] = {
+	0.8F, 1.0F, 1.2F, 1.4F, 1.6F, 1.8F,
 };
 
 /* @ 0x00C0, 8 bytes: FTAttributes.animlock target (was dLinkMain_pre+0xC0) */

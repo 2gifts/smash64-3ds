@@ -24,6 +24,9 @@ extern u8 dYoshiShieldPose_shield_anim_joint_7[];
 extern AObjEvent32 **dYoshiModel_JointTree_post[];
 extern AObjEvent32 **dYoshiModel_JointTree_0x6948_post[];
 #include <ft/fttypes.h>
+#include <wp/wptypes.h>  // WPAttributes
+#include <gm/gmsound.h>  // nSYAudioFGM*
+#include <gm/gmdef.h>    // nGMHitElement*
 
 extern u8 dITCommonObject_StarRod_Weapon_data[];
 extern DObjDesc dYoshiModel_JointTree[];
@@ -62,46 +65,75 @@ extern u8 dYoshiSpecial2_gap_0x04D8_sub_0x18[];
 extern DObjDesc dYoshiSpecial3_EggLay[];
 
 /* Pre-attributes data (287 words, 0x047C bytes) */
-/* @ 0x0000, 116 bytes: FTAttributes.file_handles target (was dYoshiMain_pre+0x0) */
-u32 dYoshiMain_file_handles[29] = {
+/* @ 0x0000, 12 bytes: 3 cross-file handle pointers (chain-rewritten). */
+void *dYoshiMain_file_handles[3] = {
 
-	(u32)&dYoshiMainMotion_EggLay_0x0034, /* extern */
-	(u32)dYoshiSpecial2_gap_0x0530, /* extern -> 0x0530 */
-	(u32)&dYoshiSpecial3_EggLay, /* extern -> 0x0960 */
-	(u32)dYoshiModel_gap_0xA860, /* extern -> 0xA860 */
-	0x00000000,
-	0x00000000,
-	0x00000000,
-	0x00000000,
-	0x00000000,
-	0x00000000,
-	0x00960000,
-	0xFF6A0096,
-	0x00C85A40,
-	0x0C838000,
-#if defined(REGION_JP)
-	0x0660F134,
-#else
-	0x0660F934,
-#endif
-	0x0C800000,
-	(u32)&dITCommonObject_StarRod_Weapon_data, /* extern -> 0x5458 */
-	0x00000000,
-	0x00000000,
-	0x00000000,
-	0x00000000,
-	0x00000000,
-	0x00000000,
-	0x00640000,
-	0xFF9C0060,
-	0x00A05A40,
-	0x1901001E,
-#if defined(REGION_JP)
-	0xFD6101BC,
-#else
-	0xFD6111BC,
-#endif
-	0x00000000,
+	(void *)&dYoshiMainMotion_EggLay_0x0034, /* extern */
+	(void *)dYoshiSpecial2_gap_0x0530, /* extern -> 0x0530 */
+	(void *)&dYoshiSpecial3_EggLay, /* extern -> 0x0960 */
+};
+
+/* @ 0x000C, 52 bytes: WPAttributes for the thrown Egg Throw egg.
+ * Referenced from wp/wpyoshi/wpyoshieggthrow.c via llYoshiMainEggThrowWeaponAttributes (0x0C). */
+WPAttributes dYoshiMain_EggThrowWeaponAttributes = {
+	(void *)dYoshiModel_gap_0xA860, /* data */
+	NULL,                           /* p_mobjsubs */
+	NULL,                           /* anim_joints */
+	NULL,                           /* p_matanim_joints */
+	{ { 0, 0, 0 }, { 0, 0, 0 } },   /* attack_offsets */
+	150, 0, -150, 150,              /* map_coll top/center/bottom/width */
+	200,                  /* size             : 16 */
+	361,                  /* angle            : 10 */
+	50,                   /* knockback_scale  : 10 */
+	14,                   /* damage           :  8 */
+	nGMHitElementNormal,  /* element          :  4 */
+	0,                    /* knockback_weight : 10 */
+	6,                    /* shield_damage    :  8 */
+	1,                    /* attack_count     :  2 */
+	1,                    /* can_setoff       :  1 */
+	nSYAudioFGMKickL,     /* sfx              : 10 */
+	1,                    /* priority         :  3 */
+	0,                    /* can_rehit_item   :  1 */
+	0,                    /* can_rehit_fighter:  1 */
+	1,                    /* can_hop          :  1 */
+	1,                    /* can_reflect      :  1 */
+	0,                    /* can_absorb       :  1 */
+	1,                    /* can_shield       :  1 */
+	0,                    /* unused_0x2F_b6   :  1 */
+	0,                    /* unused_0x2F_b7   :  1 */
+	50,                   /* knockback_base   : 10 */
+};
+
+/* @ 0x0040, 52 bytes: WPAttributes for the ground-pound impact stars (shares the
+ * Star Rod star model from ITCommonObject).
+ * Referenced from wp/wpyoshi/wpyoshistar.c via llYoshiMainStarWeaponAttributes (0x40). */
+WPAttributes dYoshiMain_StarWeaponAttributes = {
+	(void *)&dITCommonObject_StarRod_Weapon_data, /* data */
+	NULL,                                         /* p_mobjsubs */
+	NULL,                                         /* anim_joints */
+	NULL,                                         /* p_matanim_joints */
+	{ { 0, 0, 0 }, { 0, 0, 0 } },                 /* attack_offsets */
+	100, 0, -100, 96,                             /* map_coll top/center/bottom/width */
+	160,                  /* size             : 16 */
+	361,                  /* angle            : 10 */
+	100,                  /* knockback_scale  : 10 */
+	4,                    /* damage           :  8 */
+	nGMHitElementNormal,  /* element          :  4 */
+	30,                   /* knockback_weight : 10 */
+	-3,                   /* shield_damage    :  8 (heals shields) */
+	1,                    /* attack_count     :  2 */
+	1,                    /* can_setoff       :  1 */
+	nSYAudioFGMKickS,     /* sfx              : 10 */
+	1,                    /* priority         :  3 */
+	1,                    /* can_rehit_item   :  1 */
+	0,                    /* can_rehit_fighter:  1 */
+	1,                    /* can_hop          :  1 */
+	1,                    /* can_reflect      :  1 */
+	1,                    /* can_absorb       :  1 */
+	1,                    /* can_shield       :  1 */
+	0,                    /* unused_0x2F_b6   :  1 */
+	0,                    /* unused_0x2F_b7   :  1 */
+	0,                    /* knockback_base   : 10 */
 };
 
 /* @ 0x0074, 8 bytes: FTAttributes.animlock target (was dYoshiMain_pre+0x74) */

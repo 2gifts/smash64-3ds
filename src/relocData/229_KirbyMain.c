@@ -21,6 +21,9 @@ extern u8 dKirbyShieldPose_shield_anim_joint_6[];
 extern u8 dKirbyShieldPose_shield_anim_joint_7[];
 extern AObjEvent32 **dKirbyModel_gap_0x1920[];
 #include <ft/fttypes.h>
+#include <wp/wptypes.h>  // WPAttributes
+#include <gm/gmsound.h>  // nSYAudioFGM*
+#include <gm/gmdef.h>    // nGMHitElement*
 
 extern Gfx dFoxUnknown_DL[];
 extern u32 dKirbyMainMotion_EggLay_0x0154[];
@@ -148,28 +151,42 @@ extern DObjDesc dKirbySpecial2_VulcanJab[];
 extern Gfx dLinkBoomerangModel_Joint_0x00F8_DisplayList[];
 
 /* Pre-attributes data (514 words, 0x0808 bytes) */
-/* @ 0x0000, 60 bytes: FTAttributes.file_handles target (was dKirbyMain_pre+0x0) */
-u32 dKirbyMain_file_handles[15] = {
+/* @ 0x0000, 8 bytes: 2 cross-file handle pointers (chain-rewritten). */
+void *dKirbyMain_file_handles[2] = {
 
-	(u32)&dKirbyMainMotion_EggLay_0x0154, /* extern -> 0x0154 */
-	(u32)&dKirbySpecial2_VulcanJab, /* extern -> 0x0B20 */
-	(u32)&dKirbyModel_gap_0x1A2FC_sub_0x308C, /* extern -> 0x1D388 */
-	0x00000000,
-	(u32)&dKirbyModel_gap_0x1A2FC_sub_0x3114, /* extern -> 0x1D410 */
-	0x00000000,
-	0x00000000,
-	0x00000000,
-	0x00000000,
-	0x00DC0000,
-	0xFF240032,
-	0x00FA5A40,
-	0x0C818C00,
-#if defined(REGION_JP)
-	0x0167E19C,
-#else
-	0x0168319C,
-#endif
-	0x11800000,
+	(void *)&dKirbyMainMotion_EggLay_0x0154, /* extern -> 0x0154 */
+	(void *)&dKirbySpecial2_VulcanJab, /* extern -> 0x0B20 */
+};
+
+/* @ 0x0008, 52 bytes: WPAttributes for Kirby Final Cutter beam.
+ * Referenced from wp/wpkirby/wpkirbycutter.c via llKirbyMainCutterWeaponAttributes (0x08). */
+WPAttributes dKirbyMain_CutterWeaponAttributes = {
+	(void *)&dKirbyModel_gap_0x1A2FC_sub_0x308C,         /* data */
+	NULL,                                                /* p_mobjsubs */
+	(AObjEvent32 **)&dKirbyModel_gap_0x1A2FC_sub_0x3114, /* anim_joints */
+	NULL,                                                /* p_matanim_joints */
+	{ { 0, 0, 0 }, { 0, 0, 0 } },                        /* attack_offsets */
+	220, 0, -220, 50,                                    /* map_coll top/center/bottom/width */
+	250,                  /* size             : 16 */
+	361,                  /* angle            : 10 */
+	50,                   /* knockback_scale  : 10 */
+	6,                    /* damage           :  8 */
+	nGMHitElementSlash,   /* element          :  4 */
+	0,                    /* knockback_weight : 10 */
+	1,                    /* shield_damage    :  8 */
+	1,                    /* attack_count     :  2 */
+	1,                    /* can_setoff       :  1 */
+	nSYAudioFGMSlashM,    /* sfx              : 10 */
+	1,                    /* priority         :  3 */
+	1,                    /* can_rehit_item   :  1 */
+	0,                    /* can_rehit_fighter:  1 */
+	0,                    /* can_hop          :  1 */
+	1,                    /* can_reflect      :  1 */
+	1,                    /* can_absorb       :  1 */
+	1,                    /* can_shield       :  1 */
+	0,                    /* unused_0x2F_b6   :  1 */
+	0,                    /* unused_0x2F_b7   :  1 */
+	70,                   /* knockback_base   : 10 */
 };
 
 /* @ 0x003C, 8 bytes: FTAttributes.animlock target (was dKirbyMain_pre+0x3C) */
