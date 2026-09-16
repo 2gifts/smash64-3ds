@@ -11,6 +11,7 @@ extern void *func_800269C0_275C0(u16 id);
 #ifdef PORT
 /* For the defensive NULL-file_head guard's one-shot warning. */
 extern void port_log(const char *fmt, ...);
+extern float port_widescreen_clip_x_scale(void);
 #endif
 
 // // // // // // // // // // // //
@@ -6166,6 +6167,31 @@ LBParticle* efManagerBattleScoreMakeEffect(Vec3f *pos, s32 score)
         xf->translate = *pos;
 
         xf->scale.y = 0.25F;
+
+#ifdef PORT
+        /* Score +1/-1 is an interface effect: its position is authored in
+         * quarter-pixel HUD coordinates and must remain aligned with the
+         * player damage/stock sprites. lbParticleDrawTextures normally
+         * compresses particle X positions and widths to make world-space
+         * particles follow the widened 3D camera. Undo that correction for
+         * this HUD-only particle before it reaches the common draw path.
+         *
+         * The score position uses screen_x << 2, so the 320-wide screen's
+         * center is 160 << 2. Pre-expanding around that center cancels the
+         * later clip-X compression; widening scale.x by the inverse factor
+         * likewise preserves the sprite's authored width. */
+        {
+            f32 ws_scale = port_widescreen_clip_x_scale();
+
+            if (ws_scale > 0.0F && ws_scale < 1.0F)
+            {
+                const f32 screen_center_x = (GS_SCREEN_WIDTH_DEFAULT * 0.5F) * 4.0F;
+
+                xf->translate.x = screen_center_x + ((xf->translate.x - screen_center_x) / ws_scale);
+                xf->scale.x /= ws_scale;
+            }
+        }
+#endif
     }
     return pc;
 }
