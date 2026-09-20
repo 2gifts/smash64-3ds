@@ -1,0 +1,26 @@
+name: Source checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check Python syntax and source-only contents
+        run: |
+          python -m compileall -q 3ds/tools
+          python - <<'PY'
+          import pathlib, subprocess
+          forbidden = {'.cia', '.cxi', '.3dsx', '.elf', '.z64', '.n64', '.v64', '.srm', '.pak', '.bin', '.wav', '.png', '.jpg', '.log', '.csv'}
+          for entry in subprocess.check_output(['git', 'ls-files', '--stage', '3ds'], text=True).splitlines():
+              info, name = entry.split('\t', 1)
+              if info.startswith('160000 '): continue
+              p = pathlib.Path(name)
+              assert p.suffix.lower() not in forbidden, name
+              assert p.name != 'build-config.json', name
+              assert p.stat().st_size < 256 * 1024, name
+          PY

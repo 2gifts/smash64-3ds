@@ -4583,6 +4583,11 @@ void mnPlayersVSMakeReady(void)
 	sobj->lrt = 17;
 	sobj->pos.x = 0.0F;
 	sobj->pos.y = 71.0F;
+#ifdef __3DS__
+	/* Taller ready banner for the small native-resolution display. */
+	sobj->sprite.scaley = 2.0F;
+	sobj->pos.y = 62.5F;
+#endif
 
 	sobj = lbCommonMakeSObjForGObj(gobj, lbRelocGetFileData(Sprite*, sMNPlayersVSFiles[0], llMNPlayersCommonReadyToFightTextSprite));
 	sobj->sprite.attr &= ~SP_FASTCOPY;
@@ -4595,6 +4600,11 @@ void mnPlayersVSMakeReady(void)
 	sobj->sprite.blue = 0x9D;
 	sobj->pos.x = 50.0F;
 	sobj->pos.y = 76.0F;
+#ifdef __3DS__
+	/* Taller ready banner for the small native-resolution display. */
+	sobj->sprite.scaley = 2.0F;
+	sobj->pos.y = 72.5F;
+#endif
 
 	gobj = gcMakeGObjSPAfter(0, NULL, 22, GOBJ_PRIORITY_DEFAULT);
 	gcAddGObjDisplay(gobj, lbCommonDrawSObjAttr, 28, GOBJ_PRIORITY_DEFAULT, ~0);

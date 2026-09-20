@@ -345,6 +345,11 @@ static void gcLogSuspiciousDLPointer(const char *issue, DObj *dobj, unsigned lon
 {
     void *draw_dl = (void*)draw_dl_raw;
     void *resolved_dl = NULL;
+#ifdef __3DS__
+    /* ARM11 heap pointers are below the desktop-only threshold below. */
+    extern int port_dl_check_addr(uintptr_t addr);
+    if (port_dl_check_addr((uintptr_t)draw_dl)) return;
+#endif
 
     /* Stale-DL hunt: real host pointers on Linux brk are >= 0x10000000.
      * Token-shaped or low-offset values < 0x10000000 are suspect; widening

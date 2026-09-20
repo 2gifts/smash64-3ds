@@ -1,0 +1,9 @@
+{
+  "devkitpro": "C:/devkitPro",
+  "llvm_bin": "C:/tools/llvm-mingw/bin",
+  "gcc_version": "16.1.0",
+  "picasso": "C:/devkitPro/tools/bin/picasso.exe",
+  "3dsxtool": "C:/devkitPro/tools/bin/3dsxtool.exe",
+  "bannertool": "C:/tools/bannertool.exe",
+  "makerom": "C:/tools/makerom.exe"
+}

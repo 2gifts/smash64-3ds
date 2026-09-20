@@ -1507,6 +1507,12 @@ void ftMainProcUpdateInterrupt(GObj *fighter_gobj)
             this_fp->hold_stick_y = FTINPUT_STICKBUFFER_TICS_MAX;
         }
     }
+#ifdef __3DS__
+    {
+        extern void nativeControlsApplyFighter(void*);
+        nativeControlsApplyFighter(fighter_gobj);
+    }
+#endif
     if (this_fp->tics_since_last_z < FTINPUT_ZTRIGLAST_TICS_MAX)
     {
         this_fp->tics_since_last_z++;

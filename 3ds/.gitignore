@@ -1,0 +1,17 @@
+/assets/
+/build/
+/generated/
+/renderer/
+/toolchain/
+/build-config.json
+/baserom*
+/art/home-menu/*.png
+/art/home-menu/*.jpg
+/emulator*/
+*.cia
+*.3dsx
+*.elf
+*.srm
+*.log
+__pycache__/
+*.pyc

@@ -1,0 +1,6 @@
+[submodule "3ds/vendor/BattleShip"]
+    path = 3ds/vendor/BattleShip
+    url = https://github.com/JRickey/BattleShip.git
+[submodule "3ds/vendor/sm64-3ds"]
+    path = 3ds/vendor/sm64-3ds
+    url = https://github.com/mkst/sm64-port.git
