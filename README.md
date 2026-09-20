@@ -2,6 +2,19 @@
 
 A native port of **Super Smash Bros. for Nintendo 64** to homebrewed New Nintendo 3DS systems, built from the game's decompilation. The original game runs on the ARM11 CPU and renders through the PICA200 GPU, with stereoscopic 3D controlled by the console's 3D slider.
 
+<table>
+  <tr>
+    <th>Stereoscopic gameplay</th>
+    <th>Live match HUD</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/media/stereo-gameplay.gif" width="400" height="240" alt="Dream Land gameplay alternating between the actual left-eye and right-eye views to demonstrate depth"></td>
+    <td align="center"><img src="docs/media/bottom-screen-gameplay.png" width="320" height="240" alt="Bottom screen during a four-player stock match, showing character portraits, damage percentages, remaining stocks, and touch controls"></td>
+  </tr>
+</table>
+
+*Captured in Azahar from v1.0.0. The wigglegram alternates both eyes of a single gameplay frame to preview the depth; on a 3DS, each eye sees its own view simultaneously.*
+
 ## Features
 
 - Original single-player modes and Versus against CPU opponents.

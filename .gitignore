@@ -7,6 +7,7 @@ asm/
 *.credits.encoded
 *.credits.metadata
 *.png
+!docs/media/bottom-screen-gameplay.png
 assets
 __pycache__
 bin
