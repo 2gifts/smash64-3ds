@@ -13,6 +13,7 @@ extern void nativeRenderBegin(void);
 extern void nativeRenderCapture(void);
 extern char __text_start,__end__;
 void* native_current_dl;
+unsigned native_stereo_backdrop;
 static uintptr_t segments[16];
 static unsigned dlDepth,dlCommands;
 static struct Range {uintptr_t begin,end;} ranges[4096];
@@ -92,7 +93,7 @@ void nativeSetSegment(unsigned segment,uintptr_t base) {
     segments[segment]=p?(uintptr_t)p:base;
 }
 void nativeDlFrameBegin(void) {
-    dlDepth=dlCommands=0;
+    dlDepth=dlCommands=0;native_stereo_backdrop=0;
     extern volatile uint32_t ssb_frame_count;
     extern void portTextureCacheDeleteRange(const void*,size_t);
     if(native_test_dump_textures&&ssb_frame_count==850)portTextureCacheDeleteRange(NULL,0xffffffffu);

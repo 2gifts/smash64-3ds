@@ -35,7 +35,7 @@ def main():
     common=['-target','t','-exefslogo','-elf',dst/'ssb64-package.elf',
         '-rsf',dst/'smash64.rsf','-icon',dst/'icon.smdh','-banner',dst/'banner.bin']
     for fmt,suffix in [('cia','cia'),('ncch','cxi')]:
-        run(makerom,'-f',fmt,*common,*(['-ver','7'] if fmt=='cia' else []),'-o',dst/('smash64-development.'+suffix))
+        run(makerom,'-f',fmt,*common,*(['-ver','8'] if fmt=='cia' else []),'-o',dst/('smash64-development.'+suffix))
     report={'development_only':args.variant!='release','build_variant':args.variant,'validation_complete':False,'fully_playable':False,'files':{}}
     for path in dst.glob('smash64-development.*'):
         report['files'][path.name]={'bytes':path.stat().st_size,'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}

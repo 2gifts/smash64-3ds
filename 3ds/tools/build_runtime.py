@@ -65,6 +65,7 @@ def main():
          '-lstdc++',*(['-lcitro3d'] if args.render else []),'-lctru','-lm','-lc','-lsysbase','-lgcc','--end-group',
          gcc/'crtend.o',gcc/'crtn.o','-o',elf]
     cmd+=['--wrap=abort','--wrap=ftParamUpdatePlayerBattleStats','--wrap=lbCommonDrawSObjAttr']
+    cmd+=['--wrap=ftCommonAttackLw4CheckInterruptSquat']
     if args.render:cmd+=['--wrap=portResetStructFixups','--wrap=portEvictStructFixupsInRange']
     p=subprocess.run(list(map(str,cmd)),capture_output=True,text=True)
     (out/'link.log').write_text(p.stdout+p.stderr)

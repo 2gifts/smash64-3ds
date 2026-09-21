@@ -101,7 +101,11 @@ static void nativeQueueDraw(int first,int count) {
         C3D_TexEnvOpAlpha(e,GPU_TEVOP_A_SRC_R,GPU_TEVOP_A_SRC_ALPHA,GPU_TEVOP_A_SRC_ALPHA);
         p->fog=false;
     }
-    p->shift=s2DMode?0.0f:gSliderLevel*NATIVE_STEREO_SHIFT_MAX*nativeDisplayClipScale();p->focus=native_stereo_focus_w;
+    p->shift=s2DMode&&!native_stereo_backdrop?0.0f:gSliderLevel*NATIVE_STEREO_SHIFT_MAX*nativeDisplayClipScale();
+    /* Zero focus puts the wallpaper at the far disparity limit. Every
+     * perspective point with positive W and focus is strictly in front of
+     * this plane, even when the match camera zooms or changes stages. */
+    p->focus=native_stereo_backdrop?0.0f:native_stereo_focus_w;
     if(nativeDrawCount>1&&!native_test_uncached_state){
         NativeDraw* a=p-1;
         /* Join contiguous triangles only when all visible state agrees.

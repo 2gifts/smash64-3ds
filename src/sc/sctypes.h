@@ -218,11 +218,9 @@ struct SCStaffrollMatrix
 	 * unkgmcreditsstruct0x10, interpolation), and the credits cursor lock-on
 	 * test reads a garbage "name height" → projected quad is nonsense → A
 	 * never registers as overlapping a name. */
-#ifdef PORT
-	u8 filler_0x0[0x10];
-#else
-	u8 filler_0x0[0xC];
-#endif
+	/* PORT also includes 32-bit hosts such as the 3DS. Match the actual
+	 * pointer width instead of assuming every native port uses LP64. */
+	u8 filler_0x0[sizeof(SCStaffrollName*) + sizeof(s32) + sizeof(sb32)];
 	f32 unk_gmcreditsmtx_0xC;
 	f32 unk_gmcreditsmtx_0x10;
 	f32 unk_gmcreditsmtx_0x14;

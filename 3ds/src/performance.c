@@ -109,14 +109,14 @@ static void writeMenus(const void* data){
     FILE* f=fopen(PERF_PATH "/menus.tmp","w");
     if(!f){writeError();return;}
     setvbuf(f,NULL,_IOFBF,8192);
-    fprintf(f,"# smash64_menus_v1 build=r8 started_unix=%lld\n# cumulative_this_session=1 scene_entry_frame_excluded=1\nscene,",(long long)time(NULL));
+    fprintf(f,"# smash64_menus_v1 build=r9 started_unix=%lld\n# cumulative_this_session=1 scene_entry_frame_excluded=1\nscene,",(long long)time(NULL));
     fputs(columns,f);
     for(unsigned i=0;i<62;i++)if(menus[i].frames){fprintf(f,"%u,",i);writeRow(f,&menus[i]);}
     int ok=!ferror(f);if(fflush(f))ok=0;if(fclose(f))ok=0;
     if(ok){remove(PERF_PATH "/menus.csv");if(rename(PERF_PATH "/menus.tmp",PERF_PATH "/menus.csv"))ok=0;}
     if(!ok)writeError();
     f=fopen(PERF_PATH "/events.tmp","w");if(!f){writeError();return;}
-    fprintf(f,"# smash64_events_v1 build=r8 cumulative_this_session=1\n# ids_0_to_61=scene_entry id_62=game_set id_63=stage_preview_change\n");
+    fprintf(f,"# smash64_events_v1 build=r9 cumulative_this_session=1\n# ids_0_to_61=scene_entry id_62=game_set id_63=stage_preview_change\n");
     fprintf(f,"event,count,mean_ms,worst_ms,cpu_tick_ms,asset_reads,asset_cache_hits,asset_read_kib\n");
     for(unsigned i=0;i<64;i++)if(p->events[i].count){
         const EventRow* e=&p->events[i];
@@ -151,7 +151,7 @@ static void writeMatch(const void* data){
     FILE* f=fopen(temp,"w");
     if(!f){writeError();return;}
     setvbuf(f,NULL,_IOFBF,16384);
-    fprintf(f,"# smash64_perf_v1 sequence=%u build=r8\n# started_unix=%lld reason=%s\n",p->sequence,(long long)p->started,p->reason);
+    fprintf(f,"# smash64_perf_v1 sequence=%u build=r9\n# started_unix=%lld reason=%s\n",p->sequence,(long long)p->started,p->reason);
     fprintf(f,"# scene=%lu stage=%lu fighters=%lu;%lu;%lu;%lu kinds=%lu;%lu;%lu;%lu\n",
         (unsigned long)p->match.scene,(unsigned long)p->match.stage,
         (unsigned long)p->match.fighter[0],(unsigned long)p->match.fighter[1],(unsigned long)p->match.fighter[2],(unsigned long)p->match.fighter[3],

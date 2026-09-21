@@ -40,7 +40,7 @@ def main():
     assert int.from_bytes(ticket[0x1dc:0x1e4],'big')==title
     assert int.from_bytes(tmd[0x18c:0x194],'big')==title
     title_version=int.from_bytes(tmd[0x1dc:0x1de],'big')
-    assert title_version==7
+    assert title_version==8
     assert int.from_bytes(tmd[0x1de:0x1e0],'big')==1
     chunk=tmd[0xb04:0xb34]
     assert int.from_bytes(chunk[8:16],'big')==size and not int.from_bytes(chunk[6:8],'big')&1

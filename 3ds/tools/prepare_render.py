@@ -127,7 +127,13 @@ def main():
                 gfx_matrix_mul(rsp.MP_matrix,rsp.modelview_matrix_stack[rsp.modelview_matrix_stack_size-1],rsp.P_matrix);
                 break;
             case G_RDPLOADSYNC: case G_RDPPIPESYNC: case G_RDPTILESYNC: case G_RDPFULLSYNC:
-            case G_SPNOOP: case G_NOOP: case G_LOAD_UCODE:
+            case G_LOAD_UCODE:
+                break;
+            case G_SPNOOP: case G_NOOP:
+                if(cmd->words.w1==NATIVE_BACKDROP_BEGIN||cmd->words.w1==NATIVE_BACKDROP_END){
+                    gfx_flush();
+                    native_stereo_backdrop=cmd->words.w1==NATIVE_BACKDROP_BEGIN;
+                }
                 break;
             case G_CULLDL: {
                 unsigned first=C0(0,16)/2,last=C1(0,16)/2,planes=63;
@@ -145,6 +151,13 @@ def main():
     pc=pc.replace('    gfx_matrix_mul(rsp.MP_matrix, rsp.modelview_matrix_stack[rsp.modelview_matrix_stack_size - 1], rsp.P_matrix);\n}', '    gfx_matrix_mul(rsp.MP_matrix, rsp.modelview_matrix_stack[rsp.modelview_matrix_stack_size - 1], rsp.P_matrix);\n    if((parameters & G_MTX_PROJECTION)&&(parameters & G_MTX_LOAD))gfx_rapi->set_2d(!nativeStereoLoadProjection(addr));\n}')
     pc=pc.replace('    rdp.viewport = default_viewport;', '    gfx_flush();gfx_rapi->set_2d(1);\n    rdp.viewport = default_viewport;')
     pc=pc.replace('    rsp.geometry_mode = geometry_mode_saved;', '    gfx_flush();gfx_rapi->set_2d(!native_stereo_perspective);\n    rsp.geometry_mode = geometry_mode_saved;')
+    pc=pc.replace('    struct LoadedVertex* ul =', '''    if(native_stereo_backdrop){
+        /* Uniformly overscan the tiled wallpaper before eye translation so
+         * both eye buffers remain covered. Slider zero preserves mono pixels. */
+        float scale=1.0f+gSliderLevel*NATIVE_STEREO_SHIFT_MAX*nativeDisplayClipScale()*1.1f;
+        ulxf*=scale;lrxf*=scale;ulyf*=scale;lryf*=scale;
+    }
+    struct LoadedVertex* ul =''',1)
     # Repeated display-list state commands do not need to split a triangle
     # batch. Preserve ordering when the effective value actually changes.
     pc=pc.replace('    gfx_flush();\n    uint64_t mask =', '    uint64_t mask =')
