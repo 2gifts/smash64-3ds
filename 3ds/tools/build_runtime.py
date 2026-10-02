@@ -5,6 +5,7 @@ import sys
 import shutil
 import struct
 import argparse
+import os
 from build import ROOT,UPSTREAM,ARM,SDK,BIN,OUT,ARCH,GCC_VERSION,tool,run,game_flags
 
 def main():
@@ -22,6 +23,7 @@ def main():
     objects=[]
     sources=[ROOT/'src/game_host.c',ROOT/'src/vanilla_policy.c',ROOT/'src/coroutine.c',ROOT/'src/platform_3ds.c',ROOT/'src/performance.c',ROOT/'src/save_layout_check.c',ROOT/'src/stereo_camera.c']
     sources += [ROOT/'src/display_settings.c',ROOT/'src/io_worker.c']
+    if args.bench:sources.append(ROOT/'src/bench_wraps.c')
     sources += [ROOT/'src/audio_pace.c',ROOT/'src/control_settings.c',ROOT/'src/control_input.c',ROOT/'src/control_game.c']
     sources += [ROOT/'src/bottom_game.c',ROOT/'src/bottom_draw.c',ROOT/'src/bottom_3ds.c',ROOT/'src/wallpaper.c']
     if args.render:
@@ -47,6 +49,7 @@ def main():
         if args.release:flags += ['-DSSB_RELEASE']
         if args.bench:flags += ['-DSSB_BENCH']
         flags += profile
+        flags += os.environ.get('SSB_EXTRA_CFLAGS','').split()  # e.g. -DSSB_STAGE_PROFILE
         run([BIN/'clang.exe',*flags,'-c',src,'-o',obj]);objects.append(obj)
     asm=(UPSTREAM/'port/coroutine_armv7.S').read_text().replace('.fpu    vfpv3-d16','.fpu    vfp')
     (out/'coroutine_arm.S').write_text(asm)
@@ -71,6 +74,7 @@ def main():
          gcc/'crtend.o',gcc/'crtn.o','-o',elf]
     cmd+=['--wrap=abort','--wrap=ftParamUpdatePlayerBattleStats','--wrap=lbCommonDrawSObjAttr']
     cmd+=['--wrap=ftCommonAttackLw4CheckInterruptSquat']
+    if args.bench:cmd+=['--wrap=lbRelocGetForceExternHeapFile','--wrap=portRelocByteSwapBlob','--wrap=port_aobj_register_halfswapped_range','--wrap=port_aobj_event32_unhalfswap_stream','--wrap=port_aobj_unhalfswap_visit']
     if args.render:cmd+=['--wrap=portResetStructFixups','--wrap=portEvictStructFixupsInRange','--wrap=portTextureCacheDeleteRange']
     p=subprocess.run(list(map(str,cmd)),capture_output=True,text=True)
     (out/'link.log').write_text(p.stdout+p.stderr)

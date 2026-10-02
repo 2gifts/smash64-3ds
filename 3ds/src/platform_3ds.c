@@ -353,14 +353,20 @@ int main(void) {
             {extern uint64_t native_evict_ticks[3];double e=1000.0/SYSCLOCK_ARM11/60;
              port_stats("EVICTS frame=%u cache=%.3f tracker=%.3f textures=%.3f\n",ssb_frame_count,native_evict_ticks[0]*e,native_evict_ticks[1]*e,native_evict_ticks[2]*e);
              memset(native_evict_ticks,0,sizeof(native_evict_ticks));}
+            {extern uint64_t native_load_ticks[4];double e=1000.0/SYSCLOCK_ARM11/60;
+             port_stats("LOADS frame=%u force_load=%.3f byteswap=%.3f halfswap_register=%.3f\n",ssb_frame_count,native_load_ticks[0]*e,native_load_ticks[1]*e,native_load_ticks[2]*e);
+             memset(native_load_ticks,0,sizeof(native_load_ticks));}
+            {extern uint64_t native_anim_ticks[2];double e=1000.0/SYSCLOCK_ARM11/60;
+             port_stats("ANIMFIX frame=%u stream_unhalfswap=%.3f interp_visit=%.3f\n",ssb_frame_count,native_anim_ticks[0]*e,native_anim_ticks[1]*e);
+             memset(native_anim_ticks,0,sizeof(native_anim_ticks));}
 #endif
             {extern uint64_t native_thread_ticks[10];double t=1000.0/46875000.0/60;
              port_stats("THREADS frame=%u game=%.3f scheduler=%.3f audio=%.3f controller=%.3f debug=%.3f\n",ssb_frame_count,
                 native_thread_ticks[5]*t,native_thread_ticks[3]*t,native_thread_ticks[4]*t,native_thread_ticks[6]*t,native_thread_ticks[8]*t);
              memset(native_thread_ticks,0,sizeof(native_thread_ticks));}
             {extern uint64_t native_prof_ticks[8];double k=1000.0/SYSCLOCK_ARM11/60;
-             port_stats("STAGES frame=%u vertex=%.3f flush=%.3f texture=%.3f end=%.3f\n",ssb_frame_count,
-                native_prof_ticks[0]*k,native_prof_ticks[2]*k,native_prof_ticks[3]*k,native_prof_ticks[5]*k);
+             port_stats("STAGES frame=%u vertex=%.3f flush=%.3f texture=%.3f end=%.3f matrix=%.3f\n",ssb_frame_count,
+                native_prof_ticks[0]*k,native_prof_ticks[2]*k,native_prof_ticks[3]*k,native_prof_ticks[5]*k,native_prof_ticks[4]*k);
              memset(native_prof_ticks,0,sizeof(native_prof_ticks));}
             {extern unsigned native_fix_calls,native_fix_hits,native_fix_outside,native_fix_invalidations;
              port_stats("FIX frame=%u calls=%u hits=%u outside=%u invalidations=%u\n",ssb_frame_count,native_fix_calls,native_fix_hits,native_fix_outside,native_fix_invalidations);

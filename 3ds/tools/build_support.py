@@ -10,7 +10,6 @@ def compile_support():
     bridges()
     cpp=[*sorted((ROOT/'generated').glob('*.cpp')),
          ROOT/'src/native_assets.cpp',
-         UPSTREAM/'port/bridge/lbreloc_byteswap.cpp',
          UPSTREAM/'port/resource/RelocPointerTable.cpp',
          UPSTREAM/'port/resource/RelocFileTable.us.cpp',
          UPSTREAM/'port/port_aobj_fixup.cpp',

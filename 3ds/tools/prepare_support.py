@@ -48,5 +48,39 @@ def bridges():
 '''+s[b:]
         write(name+'.cpp',s)
 
+    byteswap()
+
+def byteswap():
+    """Ordered fixup trackers, so evicting a range costs what it removes.
+
+    The trackers are pure membership sets. Range eviction walked every element
+    of five hash containers, and each asset load evicts its destination: the
+    Fighting Polygon intro reloads fighter animations about 30 times per frame
+    (the original draws each polygon in three poses), which spent ~15 ms per
+    frame (emulator) in these walks. Ordered containers keep the same
+    membership answers and erase exactly [lo, hi) directly."""
+    s=(UPSTREAM/'port/bridge/lbreloc_byteswap.cpp').read_text(encoding='utf-8')
+    def sub(a,b):
+        nonlocal s
+        if s.count(a)!=1:raise ValueError(a[:60])
+        s=s.replace(a,b)
+    for name in ('sStructU16Fixups','sTexFixupWords','sDeswizzle4cFixups','sChainSlotAddrs'):
+        sub(f'static std::unordered_set<uintptr_t> {name};',f'static std::set<uintptr_t> {name};')
+    sub('static std::unordered_map<uintptr_t, unsigned int> sTexFixupExtent;','static std::map<uintptr_t, unsigned int> sTexFixupExtent;')
+    sub("""	auto evict_set = [&](std::unordered_set<uintptr_t> &s) {
+		for (auto it = s.begin(); it != s.end(); ) {
+			if (*it >= lo && *it < hi) it = s.erase(it);
+			else ++it;
+		}
+	};""","""	auto evict_set = [&](std::set<uintptr_t> &s) {
+		s.erase(s.lower_bound(lo), s.lower_bound(hi));
+	};""")
+    sub("""	for (auto it = sTexFixupExtent.begin(); it != sTexFixupExtent.end(); ) {
+		if (it->first >= lo && it->first < hi) it = sTexFixupExtent.erase(it);
+		else ++it;
+	}""","""	sTexFixupExtent.erase(sTexFixupExtent.lower_bound(lo), sTexFixupExtent.lower_bound(hi));""")
+    sub('#include <unordered_set>\n','#include <unordered_set>\n#include <set>\n#include <map>\n')
+    write('lbreloc_byteswap.cpp',s)
+
 if __name__=='__main__':
     bridges()

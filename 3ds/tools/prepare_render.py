@@ -347,10 +347,119 @@ static void gfx_dp_set_combine_mode(''')
     a='                        buf_vbo[buf_vbo_len++] = color->a / 255.0f;'
     if pc.count(a)!=1:raise ValueError(a)
     pc=pc.replace(a,'                        buf_vbo[buf_vbo_len++] = color->a * (1.0f / 255.0f);')
+    # Vertex transform: hoist per-call state out of the per-vertex loop. The
+    # build allows any store to alias (-fno-strict-aliasing), so the compiler
+    # reloaded all 16 matrix elements and the light state for every vertex,
+    # and it called the widescreen scale and divided by 127 per light each
+    # time. Scenes with many lit fighters (the Fighting Polygon intro draws
+    # 30 models a frame) spent most of their translation time here.
+    pc=function(pc,'gfx_sp_vertex','''    SUPPORT_CHECK(dest_index+n_vertices <= MAX_VERTICES);
+    nativeFixVertices(vertices,n_vertices);
+    const float m00=rsp.MP_matrix[0][0],m01=rsp.MP_matrix[0][1],m02=rsp.MP_matrix[0][2],m03=rsp.MP_matrix[0][3];
+    const float m10=rsp.MP_matrix[1][0],m11=rsp.MP_matrix[1][1],m12=rsp.MP_matrix[1][2],m13=rsp.MP_matrix[1][3];
+    const float m20=rsp.MP_matrix[2][0],m21=rsp.MP_matrix[2][1],m22=rsp.MP_matrix[2][2],m23=rsp.MP_matrix[2][3];
+    const float m30=rsp.MP_matrix[3][0],m31=rsp.MP_matrix[3][1],m32=rsp.MP_matrix[3][2],m33=rsp.MP_matrix[3][3];
+    const float aspect=nativeDisplayClipScale();
+    const uint32_t geometry=rsp.geometry_mode;
+    const int scaleS=rsp.texture_scaling_factor.s,scaleT=rsp.texture_scaling_factor.t;
+    const bool lighting=(geometry&G_LIGHTING)!=0,texgen=lighting&&(geometry&G_TEXTURE_GEN),fog=(geometry&G_FOG)!=0;
+    /* Directional lights, pre-scaled by 1/127 (the N64 normal range). */
+    int lights=0,ambient[3]={0,0,0};
+    float light[MAX_LIGHTS][3],lightCol[MAX_LIGHTS][3],lookat[2][3];
+    if(lighting){
+        if (rsp.lights_changed) {
+            for (int i = 0; i < rsp.current_num_lights - 1; i++) {
+                calculate_normal_dir(&rsp.current_lights[i], rsp.current_lights_coeffs[i]);
+            }
+            static const Light_t lookat_x = {{0, 0, 0}, 0, {0, 0, 0}, 0, {127, 0, 0}, 0};
+            static const Light_t lookat_y = {{0, 0, 0}, 0, {0, 0, 0}, 0, {0, 127, 0}, 0};
+            calculate_normal_dir((rsp.lookat_valid&1)?&rsp.current_lookat[0]:&lookat_x, rsp.current_lookat_coeffs[0]);
+            calculate_normal_dir((rsp.lookat_valid&2)?&rsp.current_lookat[1]:&lookat_y, rsp.current_lookat_coeffs[1]);
+            rsp.lights_changed = false;
+        }
+        lights=rsp.current_num_lights-1;
+        for(int c=0;c<3;c++)ambient[c]=rsp.current_lights[lights].col[c];
+        for(int i=0;i<lights;i++)for(int c=0;c<3;c++){
+            light[i][c]=rsp.current_lights_coeffs[i][c]*(1.0f/127.0f);
+            lightCol[i][c]=rsp.current_lights[i].col[c];
+        }
+        for(int i=0;i<2;i++)for(int c=0;c<3;c++)lookat[i][c]=rsp.current_lookat_coeffs[i][c]*(1.0f/127.0f);
+    }
+    const bool stereo=gGfx3DEnabled;
+    const float stereoShift=native_stereo_perspective?gSliderLevel*NATIVE_STEREO_SHIFT_MAX:0.0f,stereoFocus=native_stereo_focus_w;
+    const float fogMul=rsp.fog_mul,fogOffset=rsp.fog_offset;
+    for (size_t i = 0; i < n_vertices; i++, dest_index++) {
+        const Vtx_t *v = &vertices[i].v;
+        const Vtx_tn *vn = &vertices[i].n;
+        struct LoadedVertex *d = &rsp.loaded_vertices[dest_index];
+        const float ox=v->ob[0],oy=v->ob[1],oz=v->ob[2];
+        float x = ox * m00 + oy * m10 + oz * m20 + m30;
+        float y = ox * m01 + oy * m11 + oz * m21 + m31;
+        float z = ox * m02 + oy * m12 + oz * m22 + m32;
+        float w = ox * m03 + oy * m13 + oz * m23 + m33;
+        x *= aspect;
+        short U = v->tc[0] * scaleS >> 16;
+        short V = v->tc[1] * scaleT >> 16;
+        if (lighting) {
+            const float nx=vn->n[0],ny=vn->n[1],nz=vn->n[2];
+            int r=ambient[0],g=ambient[1],b=ambient[2];
+            for (int l = 0; l < lights; l++) {
+                float intensity = nx*light[l][0] + ny*light[l][1] + nz*light[l][2];
+                if (intensity > 0.0f) {
+                    r += intensity * lightCol[l][0];
+                    g += intensity * lightCol[l][1];
+                    b += intensity * lightCol[l][2];
+                }
+            }
+            d->color.r = r > 255 ? 255 : r;
+            d->color.g = g > 255 ? 255 : g;
+            d->color.b = b > 255 ? 255 : b;
+            if (texgen) {
+                float dotx = nx*lookat[0][0] + ny*lookat[0][1] + nz*lookat[0][2];
+                float doty = nx*lookat[1][0] + ny*lookat[1][1] + nz*lookat[1][2];
+                U = (int32_t)((dotx + 1.0f) * 0.25f * scaleS);
+                V = (int32_t)((doty + 1.0f) * 0.25f * scaleT);
+            }
+        } else {
+            d->color.r = v->cn[0];
+            d->color.g = v->cn[1];
+            d->color.b = v->cn[2];
+        }
+        d->u = U;
+        d->v = V;
+        /* Trivial clip rejection; with 3D on, each eye shifts x by up to
+         * the stereo offset, so widen the horizontal test accordingly. */
+        float wx=w;
+        if (stereo) wx=w+fabsf(stereoShift*(w-stereoFocus));
+        unsigned clip=0;
+        if (x < -wx) clip |= 1;
+        if (x > wx) clip |= 2;
+        if (y < -w) clip |= 4;
+        if (y > w) clip |= 8;
+        if (z < -w) clip |= 16;
+        if (z > w) clip |= 32;
+        d->clip_rej = clip;
+        d->x = x;
+        d->y = y;
+        d->z = z;
+        d->w = w;
+        if (fog) {
+            float fw = fabsf(w) < 0.001f ? 0.001f : w;
+            float winv = 1.0f / fw;
+            if (winv < 0.0f) winv = 32767.0f;
+            float fog_z = z * winv * fogMul + fogOffset;
+            if (fog_z < 0) fog_z = 0;
+            if (fog_z > 255) fog_z = 255;
+            d->color.a = fog_z; // Use alpha variable to store fog factor
+        } else {
+            d->color.a = v->cn[3];
+        }
+    }''')
     # Bench timing shims; kept off per-triangle paths, where they would distort it.
     pc=profile(pc,[('static void gfx_sp_vertex(size_t n_vertices, size_t dest_index, const Vtx *vertices) {','gfx_sp_vertex','size_t a,size_t b,const Vtx* c','a,b,c',0),
                    ('static void gfx_flush(void) {','gfx_flush','void','',2),
-                   ('static void import_texture(int tile){','import_texture','int a','a',3)])
+                   ('static void import_texture(int tile){','import_texture','int a','a',3),
+                   ('static void gfx_sp_matrix(uint8_t parameters, const int32_t *addr) {','gfx_sp_matrix','uint8_t a,const int32_t* b','a,b',4)])
     (OUT/'gfx_pc.c').write_text(pc)
     header=(SOURCE/'gfx_cc.h').read_text().replace('    CC_LOD\n','    CC_LOD,\n    CC_ONE,\n    CC_PRIMLOD\n')
     (OUT/'gfx_cc.h').write_text(header)
