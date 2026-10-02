@@ -286,6 +286,11 @@ extern void func_80026070_26C70(u8);
 extern void func_80026174_26D74(void*, u8);
 
 #ifdef PORT
+/* A platform whose audio output can report how much it has queued sizes each
+ * frame to keep that queue near a target instead of assuming exactly 60 tics
+ * per second. Returns 0 to use the fixed pacing below. */
+extern s32 portAudioPaceSamples(s32 high_count, s32 low_count, s32 target_rate) __attribute__((weak));
+
 static s16 syAudioGetPortSampleCount(void)
 {
     s32 high_count = sSYAudioFrequency;
@@ -294,6 +299,15 @@ static s16 syAudioGetPortSampleCount(void)
     s32 error_step;
     s32 error_limit;
 
+    if (portAudioPaceSamples != NULL)
+    {
+        s32 paced = portAudioPaceSamples(high_count, low_count, target_rate);
+
+        if (paced > 0)
+        {
+            return paced;
+        }
+    }
     if ((low_count <= 0) || (high_count <= low_count) || (target_rate <= 0))
     {
         return high_count;

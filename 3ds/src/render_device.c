@@ -1,4 +1,5 @@
 #include "gfx_3ds.h"
+#include "native_profile.h"
 #include "gfx_rendering_api.h"
 #include "gfx_window_manager_api.h"
 #include <stdio.h>
@@ -62,7 +63,7 @@ void nativeRenderCapture(void) {
     for(unsigned eye=0;eye<(gGfx3DEnabled?2:1);eye++) {
         u8* pixels=captureBuffer[eye];
         GSPGPU_InvalidateDataCache(pixels,400*240*3);
-        char path[128];snprintf(path,sizeof(path),"sdmc:/3ds/ssb64/frame-%06u-%u.ppm",ssb_frame_count,eye);
+        char path[128];snprintf(path,sizeof(path),SSB_DATA_DIR "/frame-%06u-%u.ppm",ssb_frame_count,eye);
         FILE* f=fopen(path,"wb");if(!f)continue;
         fprintf(f,"P6\n400 240\n255\n");
         u8 row[400*3];
@@ -77,7 +78,7 @@ void nativeRenderCapture(void) {
     }
     /* Diagnostic capture of the RGB565 text console; disabled in normal play. */
     const u16* bottom=native_bottom_pixels;
-    char path[128];snprintf(path,sizeof(path),"sdmc:/3ds/ssb64/frame-%06u-bottom.ppm",ssb_frame_count);
+    char path[128];snprintf(path,sizeof(path),SSB_DATA_DIR "/frame-%06u-bottom.ppm",ssb_frame_count);
     FILE* f=fopen(path,"wb");
     if(f){
         fprintf(f,"P6\n320 240\n255\n");

@@ -178,8 +178,8 @@ static void controls(void){
 }
 static void guide(void){
     header("HOW TO PLAY","CONTROLS");
-    const char* key[]={"CIRCLE PAD","A","B","X / Y","L / R","ZL / ZR","D-PAD UP","START","SELECT"};
-    const char* action[]={native_tap_jump_disabled?"MOVE":"MOVE / UP TO JUMP","ATTACK","SPECIAL MOVE","JUMP","SHIELD","GRAB","TAUNT","PAUSE","SAVE REPORT / EXIT"};
+    const char* key[]={"CIRCLE PAD","A","B","X / Y","L / R","ZL / ZR","D-PAD UP","START","D-PAD"};
+    const char* action[]={native_tap_jump_disabled?"MOVE":"MOVE / UP TO JUMP","ATTACK","SPECIAL MOVE","JUMP","SHIELD","GRAB","TAUNT","PAUSE","COLOR (FIGHTER SELECT)"};
     plate(8,40,304,160,RGB(39,39,35));
     for(unsigned i=0;i<9;i++){int y=48+i*16;text(18,y,key[i],8,gold);text(139,y,action[i],8,paper);}
 }
@@ -218,7 +218,7 @@ void nativeBottomDraw(uint16_t* target,const NativeBottomState* s,unsigned fps,u
         if(n<=2){for(unsigned j=0;j<n;j++)card(8,40+j*79,304,73,&s->players[slots[j]],slots[j],s->page,s->training);}
         else for(unsigned j=0;j<4;j++)card(8+(j%2)*156,40+(j/2)*79,148,73,&s->players[j],j,s->page,s->training);
         if(s->page==BOTTOM_BATTLE&&s->stage<9)center(160,201,stages[s->stage],7,muted);
-        else if(s->page==BOTTOM_SELECT)center(160,201,"A SELECT  /  B BACK  /  START READY",7,muted);
+        else if(s->page==BOTTOM_SELECT)center(160,201,"A SELECT / B BACK / D-PAD COLOR",7,muted);
         else if(s->page==BOTTOM_STAGE)center(160,201,"CHOOSE A STAGE ON THE TOP SCREEN",7,muted);
     }else{
         header(menuTitle(s->scene),"NINTENDO 64");

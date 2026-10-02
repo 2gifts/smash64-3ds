@@ -114,9 +114,24 @@ s32 osContInit(OSMesgQueue*q,u8* bits,OSContStatus* status) {
     return 0;
 }
 s32 osContStartReadData(OSMesgQueue*q) {return osSendMesg(q,0,OS_MESG_NOBLOCK);}
+/* Character selection chooses costumes with the four N64 C buttons. The 3DS
+ * has no C buttons in that position, so the D-pad stands in for them there:
+ * up, right, down and left pick costumes 1-4 as C-up/right/down/left did.
+ * The D-pad has no other use on these screens. */
+static u16 costumeButtons(u16 b) {
+    s32 scene=gSCManagerSceneData.scene_curr;
+    if(scene<nSCKindPlayersVS||scene>nSCKind1PBonus2Players)return b;
+    u16 c=0;
+    if(b&U_JPAD){c|=U_CBUTTONS;b&=~L_TRIG;} /* D-pad up is also the taunt (L) */
+    if(b&R_JPAD)c|=R_CBUTTONS;
+    if(b&D_JPAD)c|=D_CBUTTONS;
+    if(b&L_JPAD)c|=L_CBUTTONS;
+    return (b&~(U_JPAD|R_JPAD|D_JPAD|L_JPAD))|c;
+}
 void osContGetReadData(OSContPad* pad) {
     memset(pad,0,sizeof(OSContPad)*4);
     native_read_pad(&pad[0].button,&pad[0].stick_x,&pad[0].stick_y);
+    pad[0].button=costumeButtons(pad[0].button);
     for(int i=1;i<4;i++)pad[i].errno=CONT_NO_RESPONSE_ERROR;
 }
 s32 osMotorInit(OSMesgQueue*q,OSPfs*p,int channel) {return PFS_ERR_NOPACK;}

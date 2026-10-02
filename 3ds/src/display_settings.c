@@ -1,11 +1,12 @@
 #include "native_display.h"
+#include "native_profile.h"
 #include "native_io.h"
 #include "native_perf.h"
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
 #ifndef DISPLAY_PATH
-#define DISPLAY_PATH "sdmc:/3ds/ssb64/display.cfg"
+#define DISPLAY_PATH SSB_DATA_DIR "/display.cfg"
 #endif
 volatile uint32_t native_widescreen;
 void nativeDisplayLoad(void){

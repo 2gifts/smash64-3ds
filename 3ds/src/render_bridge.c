@@ -1,4 +1,5 @@
 #include <ssb_types.h>
+#include "native_profile.h"
 #include <PR/gbi.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,12 +29,12 @@ void nativeDumpTexture(const uint8_t* pixels,unsigned w,unsigned h,const void* a
     extern volatile uint32_t ssb_frame_count;
     static unsigned count;
     if(!native_test_dump_textures||ssb_frame_count!=850||count>=256)return;
-    char path[128];snprintf(path,sizeof(path),"sdmc:/3ds/ssb64/texture-%03u.ppm",count);
+    char path[128];snprintf(path,sizeof(path),SSB_DATA_DIR "/texture-%03u.ppm",count);
     FILE* f=fopen(path,"wb");if(!f)return;
     fprintf(f,"P6\n%u %u\n255\n",w,h);
     for(unsigned y=0;y<h;y++)for(unsigned x=0;x<w;x++)fwrite(pixels+(y*w+x)*4,1,3,f);
     fclose(f);
-    snprintf(path,sizeof(path),"sdmc:/3ds/ssb64/texture-%03u.rgba",count);
+    snprintf(path,sizeof(path),SSB_DATA_DIR "/texture-%03u.rgba",count);
     f=fopen(path,"wb");if(f){fwrite(pixels,4,w*h,f);fclose(f);}
     port_log("TEXTURE id=%u addr=%p size=%ux%u fmt=%u siz=%u line=%u masks=%04x shifts=%04x\n",count++,address,w,h,fmt,siz,line,masks,shifts);
 }

@@ -25,6 +25,14 @@ int main(void){
     nativeControlsScan(0,0);nativeControlsScan(-100,60);assert(native_cstick_direction==CSTICK_LEFT);
     nativeControlsScan(0,0);nativeControlsScan(0,-100);assert(native_cstick_direction==CSTICK_DOWN);
     nativeControlsToggle(1);nativeControlsScan(0,0);nativeControlsScan(100,0);assert(!native_cstick_direction);
+    int8_t sx,sy;
+    for(int dx=-14;dx<=14;dx++)for(int dy=-14;dy<=14;dy++)if(dx*dx+dy*dy<=196){nativeStickFromCirclePad(dx,dy,&sx,&sy);assert(!sx&&!sy);}
+    nativeStickFromCirclePad(-6,2,&sx,&sy);assert(!sx&&!sy); // typical resting offset
+    nativeStickFromCirclePad(156,0,&sx,&sy);assert(sx==80&&!sy);
+    nativeStickFromCirclePad(0,-170,&sx,&sy);assert(!sx&&sy==-80);
+    nativeStickFromCirclePad(20,0,&sx,&sy);assert(sx>=1&&sx<=5); // small tilt still registers
+    nativeStickFromCirclePad(110,110,&sx,&sy);assert(sx==sy&&sx>50&&sx<=80); // diagonal keeps direction
+    int last=0;for(int dx=15;dx<=156;dx++){nativeStickFromCirclePad(dx,0,&sx,&sy);assert(sx>=last);last=sx;}
     remove(CONTROLS_PATH);puts("saved settings, defaults, malformed files, deadzone, direction, hysteresis and held-nub behavior passed");
 }
 '''
