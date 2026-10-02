@@ -27,14 +27,20 @@ volatile uintptr_t ssb_last_display_list;
 static uint64_t timeOffset;
 
 extern void nativeRenderWait(void);
+/* Time spent in each N64 thread, for the bench log (platform_3ds.c). */
+uint64_t native_thread_ticks[10];
+static uint64_t threadStart;
 /* While the render thread translates a frame, only the scheduler (3), audio
  * (4) and controller (6) threads may run; the game thread (5) and anything
  * else first waits for the frame (render_thread.c). */
 void port_watchdog_note_resume_start(int id) {
     if(id!=3&&id!=4&&id!=6)nativeRenderWait();
-    ssb_active_thread=id;
+    ssb_active_thread=id;threadStart=native_time_ticks();
 }
-void port_watchdog_note_resume_end(int id) {ssb_active_thread=-1;}
+void port_watchdog_note_resume_end(int id) {
+    if(id>=0&&id<10)native_thread_ticks[id]+=native_time_ticks()-threadStart;
+    ssb_active_thread=-1;
+}
 void port_dump_backtrace(void) {port_log("frame=%u thread=%d\n",ssb_frame_count,ssb_active_thread);}
 int port_get_frame_count(void) {return ssb_frame_count;}
 int port_get_last_dl_defer_n(void) {return 1;}

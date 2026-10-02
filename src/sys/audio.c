@@ -290,6 +290,7 @@ extern void func_80026174_26D74(void*, u8);
  * frame to keep that queue near a target instead of assuming exactly 60 tics
  * per second. Returns 0 to use the fixed pacing below. */
 extern s32 portAudioPaceSamples(s32 high_count, s32 low_count, s32 target_rate) __attribute__((weak));
+extern void portAudioBeforeSynthesis(void) __attribute__((weak));
 
 static s16 syAudioGetPortSampleCount(void)
 {
@@ -1154,6 +1155,12 @@ void syAudioThreadMain(void *arg)
         {
             osRecvMesg(&sSYAudioTicMesgQueue, NULL, OS_MESG_BLOCK);
 
+            /* A platform that draws on another core lets this tic's frame be
+             * handed over first, so synthesis overlaps drawing. */
+            if (portAudioBeforeSynthesis != NULL)
+            {
+                portAudioBeforeSynthesis();
+            }
             port_i = dSYAudioCurrentTic & 1;
             sSYAudioCurrentAcmdListBuffer = sSYAudioAcmdListBuffers[port_i];
             port_id_mod3 = dSYAudioCurrentTic % 3;

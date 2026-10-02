@@ -84,6 +84,7 @@ def main():
     ap.add_argument('--timeout', type=float, default=600)
     ap.add_argument('--port', type=int, default=24689)
     ap.add_argument('--top', type=int, default=40)
+    ap.add_argument('--all-threads', action='store_true', help='Sample every thread, not only the one the stub reports')
     ap.add_argument('--out', type=Path, help='Write the full profile here')
     args = ap.parse_args()
     user = args.azahar.parent/'user'
@@ -117,8 +118,21 @@ def main():
             # the wanted one starts, then sample densely.
             time.sleep(1.0 if waiting else args.interval)
             gdb.interrupt()
-            regs = gdb.command(b'g')
-            pc = int.from_bytes(bytes.fromhex(regs[15*8:16*8].decode()), 'little')
+            if args.all_threads:
+                threads = []
+                reply = gdb.command(b'qfThreadInfo')
+                while reply.startswith(b'm'):
+                    threads += reply[1:].split(b',')
+                    reply = gdb.command(b'qsThreadInfo')
+                pcs_now = []
+                for t in threads:
+                    gdb.command(b'Hg' + t)
+                    regs = gdb.command(b'g')
+                    pcs_now.append(int.from_bytes(bytes.fromhex(regs[15*8:16*8].decode()), 'little'))
+            else:
+                regs = gdb.command(b'g')
+                pcs_now = [int.from_bytes(bytes.fromhex(regs[15*8:16*8].decode()), 'little')]
+            pc = pcs_now[0]
             mem = gdb.command(b'm%x,1' % scene_addr)
             scene = int(mem[:2], 16) if re.fullmatch(rb'[0-9a-fA-F]+', mem) else -1
             mem = gdb.command(b'm%x,4' % frame_addr)
@@ -128,11 +142,15 @@ def main():
             if not args.want_scene or scene in args.want_scene:
                 if waiting:
                     waiting = False
-                    first_frame = frame
+                    first_frame, first_time = frame, time.monotonic()
                     continue
-                if frame < first_frame + args.skip_frames:
+                # Frame reads can fail while another core's thread is stopped;
+                # fall back to wall time (the stub runs the emulator in real time).
+                loaded = frame >= first_frame + args.skip_frames if frame else time.monotonic()-first_time >= args.skip_frames/60
+                if not loaded:
                     continue
-                pcs[pc] += 1
+                for pc in pcs_now:
+                    pcs[pc] += 1
             elif args.want_scene and not waiting and sum(pcs.values()):
                 break  # the wanted scene ended
     finally:

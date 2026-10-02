@@ -296,11 +296,12 @@ int main(void) {
 #ifdef SSB_BENCH
     {
         /* scene stage fkind frames slider: -1 keeps a default. */
-        long scene=-1,stage=-1,fkind=-1,frames=0,fixedAudio=0,syncRender=0;float slider=-1;
+        long scene=-1,stage=-1,fkind=-1,frames=0,fixedAudio=0,syncRender=0,capture=0;float slider=-1;
         FILE* f=fopen(SSB_DATA_DIR "/bench.txt","r");
-        if(f){fscanf(f,"%ld %ld %ld %ld %f %ld %ld",&scene,&stage,&fkind,&frames,&slider,&fixedAudio,&syncRender);fclose(f);}
+        if(f){fscanf(f,"%ld %ld %ld %ld %f %ld %ld %ld",&scene,&stage,&fkind,&frames,&slider,&fixedAudio,&syncRender,&capture);fclose(f);}
         native_test_fixed_audio_pace=fixedAudio;
         extern volatile uint32_t native_test_sync_render;native_test_sync_render=syncRender;
+        extern volatile uint32_t native_test_no_capture;native_test_no_capture=!capture;
         if(scene>=0)ssb_test_start_scene=scene;
         if(stage>=0)ssb_test_single_stage=stage;
         if(fkind>=0){char v[12];snprintf(v,sizeof(v),"%ld",fkind);setenv("SSB64_SPGAME_FKIND",v,1);}
@@ -348,6 +349,19 @@ int main(void) {
             port_stats("THREAD frame=%u submit_ms=%.3f render_ms=%.3f main_wait_ms=%.3f\n",ssb_frame_count,
                 native_render_submit_ticks*1000.0/SYSCLOCK_ARM11/60,native_render_work_ticks*1000.0/SYSCLOCK_ARM11/60,native_render_block_ticks*1000.0/SYSCLOCK_ARM11/60);
             native_render_submit_ticks=native_render_work_ticks=native_render_block_ticks=0;
+#ifdef SSB_BENCH
+            {extern uint64_t native_evict_ticks[3];double e=1000.0/SYSCLOCK_ARM11/60;
+             port_stats("EVICTS frame=%u cache=%.3f tracker=%.3f textures=%.3f\n",ssb_frame_count,native_evict_ticks[0]*e,native_evict_ticks[1]*e,native_evict_ticks[2]*e);
+             memset(native_evict_ticks,0,sizeof(native_evict_ticks));}
+#endif
+            {extern uint64_t native_thread_ticks[10];double t=1000.0/46875000.0/60;
+             port_stats("THREADS frame=%u game=%.3f scheduler=%.3f audio=%.3f controller=%.3f debug=%.3f\n",ssb_frame_count,
+                native_thread_ticks[5]*t,native_thread_ticks[3]*t,native_thread_ticks[4]*t,native_thread_ticks[6]*t,native_thread_ticks[8]*t);
+             memset(native_thread_ticks,0,sizeof(native_thread_ticks));}
+            {extern uint64_t native_prof_ticks[8];double k=1000.0/SYSCLOCK_ARM11/60;
+             port_stats("STAGES frame=%u vertex=%.3f flush=%.3f texture=%.3f end=%.3f\n",ssb_frame_count,
+                native_prof_ticks[0]*k,native_prof_ticks[2]*k,native_prof_ticks[3]*k,native_prof_ticks[5]*k);
+             memset(native_prof_ticks,0,sizeof(native_prof_ticks));}
             {extern unsigned native_fix_calls,native_fix_hits,native_fix_outside,native_fix_invalidations;
              port_stats("FIX frame=%u calls=%u hits=%u outside=%u invalidations=%u\n",ssb_frame_count,native_fix_calls,native_fix_hits,native_fix_outside,native_fix_invalidations);
              native_fix_calls=native_fix_hits=native_fix_outside=native_fix_invalidations=0;}

@@ -25,8 +25,12 @@ static struct Range cached;
  * requests cached. A full reset invalidates everything; the frequent ranged
  * evictions (effects and objects freed mid-match) only drop entries that
  * overlap the evicted memory, so static stage and fighter assets stay cached. */
-static struct Fixup {const void* address;unsigned count,epoch;} fixed[2][4096];
+static struct Fixup {const void* address;unsigned count,epoch;unsigned short listed;} fixed[2][4096];
 static unsigned fixupEpoch=1;
+/* Slots that hold an entry of the current epoch, so a ranged eviction
+ * visits only those instead of all 8192. */
+static unsigned short liveSlots[2*4096];
+static unsigned liveCount;
 unsigned native_fix_calls,native_fix_hits,native_fix_outside,native_fix_invalidations;
 volatile uint32_t native_test_dump_textures;
 void nativeDumpTexture(const uint8_t* pixels,unsigned w,unsigned h,const void* address,unsigned fmt,unsigned siz,unsigned line,unsigned masks,unsigned shifts){
@@ -44,21 +48,37 @@ void nativeDumpTexture(const uint8_t* pixels,unsigned w,unsigned h,const void* a
 }
 static void invalidateFixups(void){
     native_fix_invalidations++;
+    for(unsigned i=0;i<liveCount;i++)fixed[liveSlots[i]>>12][liveSlots[i]&4095].listed=0;
+    liveCount=0;
     if(++fixupEpoch==0){memset(fixed,0,sizeof(fixed));fixupEpoch=1;}
 }
 static void invalidateFixupRange(const void* p,size_t n){
     uintptr_t lo=(uintptr_t)p,hi=lo+n;
     native_fix_invalidations++;
-    for(unsigned kind=0;kind<2;kind++)for(unsigned i=0;i<4096;i++){
-        struct Fixup* f=&fixed[kind][i];
+    for(unsigned i=0;i<liveCount;){
+        unsigned kind=liveSlots[i]>>12;
+        struct Fixup* f=&fixed[kind][liveSlots[i]&4095];
         uintptr_t a=(uintptr_t)f->address,end=a+(kind?f->count*16u:f->count);
         if(f->epoch==fixupEpoch&&a<hi&&end>lo)f->epoch=0;
+        if(f->epoch!=fixupEpoch){f->listed=0;liveSlots[i]=liveSlots[--liveCount];}
+        else i++;
     }
 }
 extern void __real_portResetStructFixups(void);
 extern void __real_portEvictStructFixupsInRange(const void*,size_t);
 void __wrap_portResetStructFixups(void){nativeRenderWait();invalidateFixups();__real_portResetStructFixups();}
-void __wrap_portEvictStructFixupsInRange(const void* p,size_t n){nativeRenderWait();invalidateFixupRange(p,n);__real_portEvictStructFixupsInRange(p,n);}
+#ifdef SSB_BENCH
+uint64_t native_evict_ticks[3];
+extern unsigned long long nativeProfTick(void);
+#define EVICT_TIMED(slot,call) do{unsigned long long t0_=nativeProfTick();call;native_evict_ticks[slot]+=nativeProfTick()-t0_;}while(0)
+#else
+#define EVICT_TIMED(slot,call) call
+#endif
+void __wrap_portEvictStructFixupsInRange(const void* p,size_t n){
+    nativeRenderWait();
+    EVICT_TIMED(0,invalidateFixupRange(p,n));
+    EVICT_TIMED(1,__real_portEvictStructFixupsInRange(p,n));
+}
 static void fixAsset(const void* p,unsigned count,unsigned kind){
     unsigned hash=(((uintptr_t)p>>4)^(count*2654435761u))&4095;
     struct Fixup* f=&fixed[kind][hash];
@@ -66,7 +86,11 @@ static void fixAsset(const void* p,unsigned count,unsigned kind){
     if(f->epoch==fixupEpoch&&f->address==p&&f->count==count){native_fix_hits++;return;}
     if(kind)portRelocFixupVertexAtRuntime(p,count);else portRelocFixupTextureAtRuntime(p,count);
     uintptr_t base;size_t size;
-    if(portRelocFindContainingFile(p,&base,&size))*f=(struct Fixup){p,count,fixupEpoch};
+    if(portRelocFindContainingFile(p,&base,&size)){
+        unsigned listed=f->listed;
+        *f=(struct Fixup){p,count,fixupEpoch,1};
+        if(!listed)liveSlots[liveCount++]=(unsigned short)(kind<<12|hash);
+    }
     else native_fix_outside++;
 }
 void nativeFixVertices(const void* p,unsigned n){fixAsset(p,n,1);}
@@ -124,9 +148,11 @@ void native_dl_check(const void*p) {
 }
 void nativeUnknownOpcode(unsigned opcode,const void*p) {fail("unsupported opcode",opcode,p);}
 void nativeRenderAssertion(const char* expression,int line,const void* p) {port_log("Renderer assertion line=%d expression=%s\n",line,expression);fail("assert",line,p);}
+/* Runs for every triangle, so it has its own switch rather than following
+ * general logging (which bench builds enable). */
+volatile uint32_t native_test_combine_trace;
 void nativeCombineTrace(uint32_t a,uint32_t b,uint32_t l,uint32_t h){
-    extern volatile uint32_t ssb_test_logging;
-    if(!ssb_test_logging)return;
+    if(!native_test_combine_trace)return;
     static uint32_t seen[256][4];static unsigned count;
     for(unsigned i=0;i<count;i++)if(seen[i][0]==a&&seen[i][1]==b&&seen[i][2]==l&&seen[i][3]==h)return;
     if(count==256)return;
@@ -142,7 +168,7 @@ void nativeRenderDisplayList(void* dl) {
 /* Scene arenas are recycled by the game thread; the renderer's texture cache
  * must not change under a frame that is still being translated. */
 extern void __real_portTextureCacheDeleteRange(const void*,size_t);
-void __wrap_portTextureCacheDeleteRange(const void* p,size_t n){nativeRenderWait();__real_portTextureCacheDeleteRange(p,n);}
+void __wrap_portTextureCacheDeleteRange(const void* p,size_t n){nativeRenderWait();EVICT_TIMED(2,__real_portTextureCacheDeleteRange(p,n));}
 void portResetPackedDisplayListCache(void) {} /* ARM32 Gfx and ROM commands both occupy eight bytes. */
 void portPackedDisplayListCacheDeleteRange(const void*p,size_t n) {}
 uint32_t native_game_width=320,native_game_height=240;

@@ -13,6 +13,27 @@ def function(text,name,body):
     result,count=re.subn(pattern,lambda m:m[1]+'\n'+body+'\n}',text,flags=re.M|re.S)
     if count!=1:raise ValueError((name,count))
     return result
+PROFILE_HEADER='''
+/* -DSSB_STAGE_PROFILE times these renderer stages (STAGES log). It slows
+ * the bench noticeably, so it is off unless asked for. */
+#ifdef SSB_STAGE_PROFILE
+extern unsigned long long nativeProfTick(void);
+extern void nativeProfAdd(unsigned id,unsigned long long ticks);
+#define NATIVE_PROF(id,call) do{unsigned long long t0_=nativeProfTick();call;nativeProfAdd(id,nativeProfTick()-t0_);}while(0)
+#else
+#define NATIVE_PROF(id,call) call
+#endif
+'''
+def profile(text,functions):
+    """Route each function through a timing shim with the original name."""
+    text=PROFILE_HEADER+text
+    for definition,name,params,args,ident in functions:
+        if text.count(definition)!=1:raise ValueError(name)
+        impl=definition.replace(name+'(',name+'_impl(',1)
+        decl=impl[:impl.index(')')+1]+';'
+        shim='static void '+name+'('+params+'){NATIVE_PROF('+str(ident)+','+name+'_impl('+args+'));}'
+        text=text.replace(definition,decl+'\n'+shim+'\n'+impl)
+    return text
 def main():
     OUT.mkdir(exist_ok=True)
     for name in ['gfx_pc.h','gfx_cc.h','gfx_cc.c','gfx_window_manager_api.h','gfx_rendering_api.h','gfx_screen_config.h','shader.v.pica']:
@@ -275,6 +296,61 @@ static void gfx_dp_set_combine_mode(''')
     a='    gfx_flush();\n    gfx_rapi->end_frame();'
     if pc.count(a)!=1:raise ValueError('frame end')
     pc=pc.replace(a,'    gfx_flush();\n    extern void nativeRenderTranslated(void);\n    nativeRenderTranslated();\n    gfx_rapi->end_frame();')
+    # Per-vertex divisions are slow on the ARM11's VFP and the compiler may
+    # not turn them into multiplications. Hoist the texture scales out of the
+    # vertex loop and multiply colors by 1/255 (differences are below 1 ulp).
+    a='''        if(use_texture)for(unsigned unit=0;unit<2;unit++){
+            struct NativeTile* tile=&rdp.tiles[(rdp.first_tile+unit)&7];
+            unsigned ss=tile->shifts,st=tile->shiftt;
+            float su=ss>10?(float)(1u<<(16-ss)):1.0f/(1u<<ss);
+            float sv=st>10?(float)(1u<<(16-st)):1.0f/(1u<<st);
+            float u=v_arr[i]->u*(su/32.0f)-tile->uls/4.0f;
+            float v=v_arr[i]->v*(sv/32.0f)-tile->ult/4.0f;'''
+    b='''        if(use_texture)for(unsigned unit=0;unit<2;unit++){
+            struct NativeTile* tile=&rdp.tiles[(rdp.first_tile+unit)&7];
+            unsigned ss=tile->shifts,st=tile->shiftt;
+            float su=uvScaleS[unit]*32.0f,sv=uvScaleT[unit]*32.0f;
+            float u=v_arr[i]->u*uvScaleS[unit]-uvOffsetS[unit];
+            float v=v_arr[i]->v*uvScaleT[unit]-uvOffsetT[unit];'''
+    if pc.count(a)!=1:raise ValueError('uv scale')
+    pc=pc.replace(a,b)
+    a='''            buf_vbo[buf_vbo_len++]=used_textures[unit]?u/rdp.effective_width[unit]:0;
+            buf_vbo[buf_vbo_len++]=used_textures[unit]?v/rdp.effective_height[unit]:0;'''
+    b='''            buf_vbo[buf_vbo_len++]=used_textures[unit]?u*uvInvW[unit]:0;
+            buf_vbo[buf_vbo_len++]=used_textures[unit]?v*uvInvH[unit]:0;'''
+    if pc.count(a)!=1:raise ValueError('uv divide')
+    pc=pc.replace(a,b)
+    a='''    for (int i = 0; i < 3; i++) {
+
+#ifdef TARGET_N3DS
+        float w = v_arr[i]->w, z = (v_arr[i]->z + w) / -2.0f;'''
+    b='''    float uvScaleS[2],uvScaleT[2],uvOffsetS[2],uvOffsetT[2],uvInvW[2],uvInvH[2];
+    if(use_texture)for(unsigned unit=0;unit<2;unit++){
+        struct NativeTile* tile=&rdp.tiles[(rdp.first_tile+unit)&7];
+        unsigned ss=tile->shifts,st=tile->shiftt;
+        uvScaleS[unit]=(ss>10?(float)(1u<<(16-ss)):1.0f/(1u<<ss))/32.0f;
+        uvScaleT[unit]=(st>10?(float)(1u<<(16-st)):1.0f/(1u<<st))/32.0f;
+        uvOffsetS[unit]=tile->uls/4.0f;uvOffsetT[unit]=tile->ult/4.0f;
+        uvInvW[unit]=used_textures[unit]?1.0f/rdp.effective_width[unit]:0;
+        uvInvH[unit]=used_textures[unit]?1.0f/rdp.effective_height[unit]:0;
+    }
+    for (int i = 0; i < 3; i++) {
+
+#ifdef TARGET_N3DS
+        float w = v_arr[i]->w, z = (v_arr[i]->z + w) / -2.0f;'''
+    if pc.count(a)!=1:raise ValueError('vertex loop')
+    pc=pc.replace(a,b)
+    for ch in 'rgb':
+        a=f'                    buf_vbo[buf_vbo_len++] = color->{ch} / 255.0f;'
+        if pc.count(a)!=1:raise ValueError(a)
+        pc=pc.replace(a,f'                    buf_vbo[buf_vbo_len++] = color->{ch} * (1.0f / 255.0f);')
+    a='                        buf_vbo[buf_vbo_len++] = color->a / 255.0f;'
+    if pc.count(a)!=1:raise ValueError(a)
+    pc=pc.replace(a,'                        buf_vbo[buf_vbo_len++] = color->a * (1.0f / 255.0f);')
+    # Bench timing shims; kept off per-triangle paths, where they would distort it.
+    pc=profile(pc,[('static void gfx_sp_vertex(size_t n_vertices, size_t dest_index, const Vtx *vertices) {','gfx_sp_vertex','size_t a,size_t b,const Vtx* c','a,b,c',0),
+                   ('static void gfx_flush(void) {','gfx_flush','void','',2),
+                   ('static void import_texture(int tile){','import_texture','int a','a',3)])
     (OUT/'gfx_pc.c').write_text(pc)
     header=(SOURCE/'gfx_cc.h').read_text().replace('    CC_LOD\n','    CC_LOD,\n    CC_ONE,\n    CC_PRIMLOD\n')
     (OUT/'gfx_cc.h').write_text(header)
@@ -353,6 +429,7 @@ static void gfx_dp_set_combine_mode(''')
     backend=backend.replace('    if (sShaderProgramPool[sCurShader].cc_features.opt_fog)\n        C3D_TexEnvColor(C3D_GetTexEnv(2), vec4ToU32Color(buf_vbo[hasTex ? 6 : 4], buf_vbo[hasTex ? 7 : 5], buf_vbo[hasTex ? 8 : 6], buf_vbo[hasTex ? 9 : 7]));','')
     backend=prepare_texture.backend(backend)
     backend=prepare_tmem.backend(backend)
+    backend=profile(backend,[('static void gfx_citro3d_end_frame(void)\n{','gfx_citro3d_end_frame','void','',5)])
     (OUT/'gfx_citro3d.c').write_text(backend)
     shader=(SOURCE/'shader.v.pica').read_text().replace('.fvec projection[4], modelView[4]','.fvec projection[4], modelView[4], eye')
     shader=shader.replace('    mov r0, inpos','    mov r0, inpos\n    mul r2.x, eye.x, inpos.w\n    add r0.x, r2.x, inpos.x\n    add r0.x, eye.y, r0.x')

@@ -8,7 +8,7 @@
 - `picasso.exe`, `3dsxtool.exe`, `bannertool.exe`, and `makerom.exe`.
 - Your own unmodified **Super Smash Bros. (USA), revision 1.0**, in big-endian `.z64` format: 16,777,216 bytes, SHA-1 `e2929e10fccc0aa84e5776227e798abc07cedabf`.
 
-Obtain the tools from [devkitPro](https://devkitpro.org/), [LLVM-MinGW](https://github.com/mstorsjo/llvm-mingw/releases), [bannertool](https://github.com/Steveice10/bannertool), and [Project CTR](https://github.com/3DSGuy/Project_CTR). Keep a full devkitARM installation, including its C++ headers. This repository does not install or download a toolchain automatically.
+Most people should use the one-click builder from [Releases](https://github.com/2gifts/smash64-3ds/releases) instead; it runs these same steps. To set up the tested toolchain automatically, run `python tools/bootstrap_toolchain.py` from `3ds/` after cloning: it downloads the pinned LLVM-MinGW, the devkitARM SDK files from devkitPro's official container image, makerom and bannertool (all hash-checked), builds picasso and 3dsxtool from pinned sources into `3ds/toolchain/`, and writes `build-config.json`. To use your own installation instead, obtain the tools from [devkitPro](https://devkitpro.org/), [LLVM-MinGW](https://github.com/mstorsjo/llvm-mingw/releases), [bannertool](https://github.com/Steveice10/bannertool), and [Project CTR](https://github.com/3DSGuy/Project_CTR). Keep a full devkitARM installation, including its C++ headers. This repository does not install or download a toolchain automatically.
 
 ## Clone and configure
 
@@ -41,10 +41,13 @@ To import your own completed N64 save, add `--save "C:/Games/SSB64/Smash64.srm"`
 The script checks the ROM, extracts assets locally, compiles the game and renderer, downloads the credited HOME Menu artwork, and verifies the CIA's executable and asset contents. Build output is:
 
 ```text
-3ds/build/release/Smash64-New3DS.cia
+3ds/build/release/Smash64-New3DS.cia            Smash 64 (fresh or imported save)
+3ds/build/release/Smash64-New3DS-Unlocked.cia   Smash 64: All Unlocked
 ```
 
-Copy that file to your SD card and install it with FBI. The application title ID is `000400000FF64000`. Its settings, save, and bounded performance logs live under `/3ds/ssb64/` on the SD card. DSP firmware from your console is required for audio.
+Add `--profile fresh` or `--profile unlocked` to build only one.
+
+Copy that file to your SD card and install it with FBI. The title IDs are `000400000FF64000` (settings, save and bounded performance logs under `/3ds/ssb64/`) and `000400000FF64100` for All Unlocked (`/3ds/ssb64-unlocked/`). DSP firmware from your console is required for audio.
 
 Build output, extracted assets, personal configuration, and downloaded artwork are ignored by Git. Do not distribute the resulting game package; this project and its graphics dependency are released in source form.
 
@@ -60,6 +63,9 @@ python tools/performance_test.py
 python tools/io_host_test.py
 python tools/assets_cache_test.py
 python tools/bottom_state_test.py
+python tools/audio_pace_test.py
 ```
+
+For performance work, `python tools/build_runtime.py --bench` builds a release binary with logging that reads its scenario from `bench.txt`; `tools/azahar_bench.py` runs it in a portable Azahar and summarizes frame timing, and `tools/azahar_profile.py` samples CPU hot spots through Azahar's GDB stub. `python tools/make_builder_zip.py VERSION` makes the release builder zip.
 
 Release validation also includes emulator checks of touch persistence, actual smash/aerial action states, tap-jump behavior, held-nub behavior, and an installed match through results. New 3DS hardware testing is still necessary for input feel and performance; emulator timing is not a hardware benchmark.

@@ -20,6 +20,7 @@ static Thread renderThread;
 static LightEvent renderGo,renderDone;
 static void* volatile renderPending;
 static volatile int renderBusy,renderTranslating,renderStop;
+static uint64_t submittedTick;
 int native_render_async;
 #ifdef SSB_BENCH
 volatile uint32_t native_test_sync_render;
@@ -83,6 +84,7 @@ void native_submit_display_list(void* dl) {
     nativeRenderIdle();
     if(frames++==1){aptHook(&renderAptHook,renderAptEvent,NULL);renderHooked=1;}
     native_render_submit_ticks+=svcGetSystemTick()-native_render_tick_start;
+    submittedTick=native_render_tick_start;
     renderPending=dl;
     __atomic_store_n(&renderTranslating,1,__ATOMIC_RELEASE);
     __atomic_store_n(&renderBusy,1,__ATOMIC_RELEASE);
@@ -94,4 +96,18 @@ void nativeRenderStop(void) {
     if(renderHooked){aptUnhook(&renderAptHook);renderHooked=0;}
     renderStop=1;LightEvent_Signal(&renderGo);
     threadJoin(renderThread,U64_MAX);threadFree(renderThread);renderThread=NULL;
+}
+/* Renderer stage timing for bench builds (tools/prepare_render.py profile). */
+uint64_t native_prof_ticks[8];
+unsigned long long nativeProfTick(void) {return svcGetSystemTick();}
+void nativeProfAdd(unsigned id,unsigned long long ticks) {if(id<8)native_prof_ticks[id]+=ticks;}
+/* The audio thread synthesizes once per tic. With a render thread, let it
+ * wait (yield) until this tic's frame has been handed over, so synthesis
+ * runs while that frame is drawn. The service loop resumes every thread
+ * several rounds per tic and the frame is usually ready in the second; after
+ * three rounds without one (loading, lag) synthesis runs anyway. */
+extern void port_coroutine_yield(void);
+void portAudioBeforeSynthesis(void) {
+    if(!renderThread)return;
+    for(unsigned round=0;round<3&&submittedTick!=native_render_tick_start;round++)port_coroutine_yield();
 }

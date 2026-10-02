@@ -64,6 +64,7 @@ def main():
     ap.add_argument('--inputs', type=Path, help='Scripted input intervals: begin end buttons x y')
     ap.add_argument('--timeout', type=float, default=600)
     ap.add_argument('--realtime', action='store_true', help='Run at console speed (needed for audio timing)')
+    ap.add_argument('--capture', action='store_true', help='Save top-screen frames (frame-*.ppm) at fixed frame numbers')
     ap.add_argument('--sync-render', action='store_true', help='Render on the main thread (no core-2 render thread)')
     ap.add_argument('--fixed-audio', action='store_true', help='Use the original fixed 60-tic audio pacing')
     ap.add_argument('--keep', type=Path, help='Copy the log and perf files here')
@@ -76,7 +77,9 @@ def main():
     for name in ('game.log', 'test-input.txt', *(() if args.keep_save else ('save.bin', 'save.bak'))):
         (data/name).unlink(missing_ok=True)
     shutil.rmtree(data/'perf', ignore_errors=True)
-    (data/'bench.txt').write_text(f'{args.scene} {args.stage} {args.fkind} {args.frames} {args.slider} {int(args.fixed_audio)} {int(args.sync_render)}\n')
+    for old in data.glob('frame-*.ppm'):
+        old.unlink()
+    (data/'bench.txt').write_text(f'{args.scene} {args.stage} {args.fkind} {args.frames} {args.slider} {int(args.fixed_audio)} {int(args.sync_render)} {int(args.capture)}\n')
     if args.inputs:
         shutil.copy2(args.inputs, data/'test-input.txt')
     config = user/'config/qt-config.ini'
@@ -98,7 +101,7 @@ def main():
     result['wall_seconds'] = round(time.monotonic()-start, 1)
     if args.keep:
         args.keep.mkdir(parents=True, exist_ok=True)
-        for path in [log, data/'save.bin', *(data/'perf').glob('*.csv')]:
+        for path in [log, data/'save.bin', *(data/'perf').glob('*.csv'), *data.glob('frame-*.ppm')]:
             if path.exists():
                 shutil.copy2(path, args.keep/path.name)
     for key, value in result.items():
