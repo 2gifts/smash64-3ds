@@ -75,8 +75,11 @@ def main():
     ap.add_argument('--azahar', type=Path, required=True)
     ap.add_argument('--app', type=Path, default=OUT/'bench/ssb64-bench.3dsx')
     ap.add_argument('--scene', type=int, default=1, help='Start scene for the bench build')
+    ap.add_argument('--stage', type=int, default=-1)
+    ap.add_argument('--fkind', type=int, default=-1)
     ap.add_argument('--want-scene', type=int, action='append', help='Only keep samples taken in these scenes')
     ap.add_argument('--samples', type=int, default=3000)
+    ap.add_argument('--skip-frames', type=int, default=240, help='Frames to skip after the wanted scene starts (loading)')
     ap.add_argument('--interval', type=float, default=0.004)
     ap.add_argument('--timeout', type=float, default=600)
     ap.add_argument('--port', type=int, default=24689)
@@ -93,11 +96,13 @@ def main():
     config.write_text(text)
     data = user/'sdmc/3ds/ssb64'
     data.mkdir(parents=True, exist_ok=True)
-    (data/'bench.txt').write_text(f'{args.scene} -1 -1 0 -1 0\n')
+    (data/'bench.txt').write_text(f'{args.scene} {args.stage} {args.fkind} 0 -1 0\n')
     for name in ('test-input.txt', 'save.bin', 'save.bak'):
         (data/name).unlink(missing_ok=True)
     elf = args.app.with_suffix('.elf')
-    scene_addr = symbols(elf)['gSCManagerSceneData']
+    table = symbols(elf)
+    scene_addr = table['gSCManagerSceneData']
+    frame_addr = table['ssb_frame_count']
     proc = subprocess.Popen([str(args.azahar), str(args.app.resolve())])
     pcs = collections.Counter()
     scenes = collections.Counter()
@@ -116,11 +121,16 @@ def main():
             pc = int.from_bytes(bytes.fromhex(regs[15*8:16*8].decode()), 'little')
             mem = gdb.command(b'm%x,1' % scene_addr)
             scene = int(mem[:2], 16) if re.fullmatch(rb'[0-9a-fA-F]+', mem) else -1
+            mem = gdb.command(b'm%x,4' % frame_addr)
+            frame = int.from_bytes(bytes.fromhex(mem.decode()), 'little') if re.fullmatch(rb'[0-9a-fA-F]{8}', mem) else 0
             gdb.resume()
             scenes[scene] += 1
             if not args.want_scene or scene in args.want_scene:
                 if waiting:
                     waiting = False
+                    first_frame = frame
+                    continue
+                if frame < first_frame + args.skip_frames:
                     continue
                 pcs[pc] += 1
             elif args.want_scene and not waiting and sum(pcs.values()):

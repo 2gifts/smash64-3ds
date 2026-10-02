@@ -26,7 +26,14 @@ volatile int ssb_active_thread;
 volatile uintptr_t ssb_last_display_list;
 static uint64_t timeOffset;
 
-void port_watchdog_note_resume_start(int id) {ssb_active_thread=id;}
+extern void nativeRenderWait(void);
+/* While the render thread translates a frame, only the scheduler (3), audio
+ * (4) and controller (6) threads may run; the game thread (5) and anything
+ * else first waits for the frame (render_thread.c). */
+void port_watchdog_note_resume_start(int id) {
+    if(id!=3&&id!=4&&id!=6)nativeRenderWait();
+    ssb_active_thread=id;
+}
 void port_watchdog_note_resume_end(int id) {ssb_active_thread=-1;}
 void port_dump_backtrace(void) {port_log("frame=%u thread=%d\n",ssb_frame_count,ssb_active_thread);}
 int port_get_frame_count(void) {return ssb_frame_count;}
@@ -48,6 +55,7 @@ void ssb_game_init(void) {
 }
 void ssb_game_tick(void) {
     static int lastScene=-1;
+    nativeRenderWait(); /* the vblank below reports the previous frame done */
     port_vi_simulate_vblank();
     osSendMesg(&gSYSchedulerTaskMesgQueue,(OSMesg)1,OS_MESG_NOBLOCK);
     port_resume_service_threads();

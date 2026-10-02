@@ -30,7 +30,7 @@ def main():
         run([tool('picasso'),'-o',out/'shader.shbin',ROOT/'renderer/shader.v.pica'])
         shader=(out/'shader.shbin').read_bytes()
         shader_c=out/'shader.c';shader_c.write_text('const unsigned char shader_shbin[] __attribute__((aligned(4)))={'+','.join(map(str,shader))+'};\nconst unsigned shader_shbin_size='+str(len(shader))+';\n')
-        sources += [ROOT/'src/render_bridge.c',ROOT/'src/render_device.c',ROOT/'renderer/gfx_pc.c',ROOT/'renderer/gfx_cc.c',ROOT/'renderer/gfx_citro3d.c',shader_c]
+        sources += [ROOT/'src/render_thread.c',ROOT/'src/render_bridge.c',ROOT/'src/render_device.c',ROOT/'renderer/gfx_pc.c',ROOT/'renderer/gfx_cc.c',ROOT/'renderer/gfx_citro3d.c',shader_c]
     else:sources.append(ROOT/'src/bringup_render.c')
     for src in sources:
         obj=out/(src.stem+'.o')
@@ -71,7 +71,7 @@ def main():
          gcc/'crtend.o',gcc/'crtn.o','-o',elf]
     cmd+=['--wrap=abort','--wrap=ftParamUpdatePlayerBattleStats','--wrap=lbCommonDrawSObjAttr']
     cmd+=['--wrap=ftCommonAttackLw4CheckInterruptSquat']
-    if args.render:cmd+=['--wrap=portResetStructFixups','--wrap=portEvictStructFixupsInRange']
+    if args.render:cmd+=['--wrap=portResetStructFixups','--wrap=portEvictStructFixupsInRange','--wrap=portTextureCacheDeleteRange']
     p=subprocess.run(list(map(str,cmd)),capture_output=True,text=True)
     (out/'link.log').write_text(p.stdout+p.stderr)
     if p.returncode:

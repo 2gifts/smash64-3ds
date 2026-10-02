@@ -13,6 +13,7 @@ extern void nativeRenderInit(void);
 extern void nativeRenderBegin(void);
 extern void nativeRenderCapture(void);
 extern char __text_start,__end__;
+extern void nativeRenderWait(void),nativeRenderIdle(void);
 void* native_current_dl;
 unsigned native_stereo_backdrop;
 static uintptr_t segments[16];
@@ -21,9 +22,12 @@ static struct Range {uintptr_t begin,end;} ranges[4096];
 static unsigned rangeCount;
 static struct Range cached;
 /* Runtime endian conversion is idempotent per asset allocation. Keep exact
- * requests cached, and invalidate on the same events as the upstream tracker. */
+ * requests cached. A full reset invalidates everything; the frequent ranged
+ * evictions (effects and objects freed mid-match) only drop entries that
+ * overlap the evicted memory, so static stage and fighter assets stay cached. */
 static struct Fixup {const void* address;unsigned count,epoch;} fixed[2][4096];
 static unsigned fixupEpoch=1;
+unsigned native_fix_calls,native_fix_hits,native_fix_outside,native_fix_invalidations;
 volatile uint32_t native_test_dump_textures;
 void nativeDumpTexture(const uint8_t* pixels,unsigned w,unsigned h,const void* address,unsigned fmt,unsigned siz,unsigned line,unsigned masks,unsigned shifts){
     extern volatile uint32_t ssb_frame_count;
@@ -39,23 +43,36 @@ void nativeDumpTexture(const uint8_t* pixels,unsigned w,unsigned h,const void* a
     port_log("TEXTURE id=%u addr=%p size=%ux%u fmt=%u siz=%u line=%u masks=%04x shifts=%04x\n",count++,address,w,h,fmt,siz,line,masks,shifts);
 }
 static void invalidateFixups(void){
+    native_fix_invalidations++;
     if(++fixupEpoch==0){memset(fixed,0,sizeof(fixed));fixupEpoch=1;}
+}
+static void invalidateFixupRange(const void* p,size_t n){
+    uintptr_t lo=(uintptr_t)p,hi=lo+n;
+    native_fix_invalidations++;
+    for(unsigned kind=0;kind<2;kind++)for(unsigned i=0;i<4096;i++){
+        struct Fixup* f=&fixed[kind][i];
+        uintptr_t a=(uintptr_t)f->address,end=a+(kind?f->count*16u:f->count);
+        if(f->epoch==fixupEpoch&&a<hi&&end>lo)f->epoch=0;
+    }
 }
 extern void __real_portResetStructFixups(void);
 extern void __real_portEvictStructFixupsInRange(const void*,size_t);
-void __wrap_portResetStructFixups(void){invalidateFixups();__real_portResetStructFixups();}
-void __wrap_portEvictStructFixupsInRange(const void* p,size_t n){invalidateFixups();__real_portEvictStructFixupsInRange(p,n);}
+void __wrap_portResetStructFixups(void){nativeRenderWait();invalidateFixups();__real_portResetStructFixups();}
+void __wrap_portEvictStructFixupsInRange(const void* p,size_t n){nativeRenderWait();invalidateFixupRange(p,n);__real_portEvictStructFixupsInRange(p,n);}
 static void fixAsset(const void* p,unsigned count,unsigned kind){
     unsigned hash=(((uintptr_t)p>>4)^(count*2654435761u))&4095;
     struct Fixup* f=&fixed[kind][hash];
-    if(f->epoch==fixupEpoch&&f->address==p&&f->count==count)return;
+    native_fix_calls++;
+    if(f->epoch==fixupEpoch&&f->address==p&&f->count==count){native_fix_hits++;return;}
     if(kind)portRelocFixupVertexAtRuntime(p,count);else portRelocFixupTextureAtRuntime(p,count);
     uintptr_t base;size_t size;
     if(portRelocFindContainingFile(p,&base,&size))*f=(struct Fixup){p,count,fixupEpoch};
+    else native_fix_outside++;
 }
 void nativeFixVertices(const void* p,unsigned n){fixAsset(p,n,1);}
 void nativeFixTexture(const void* p,unsigned n){fixAsset(p,n,0);}
 void port_dl_range_register(const void*p,size_t n,const char*l) {
+    nativeRenderWait();
     uintptr_t lo=(uintptr_t)p;
     if(!p||!n||lo+n<lo)return;
     cached.begin=cached.end=0;
@@ -64,6 +81,7 @@ void port_dl_range_register(const void*p,size_t n,const char*l) {
     ranges[rangeCount++]=(struct Range){lo,lo+n};
 }
 void port_dl_range_unregister(const void*p) {
+    nativeRenderWait();
     cached.begin=cached.end=0;
     for(unsigned i=0;i<rangeCount;i++)if(ranges[i].begin==(uintptr_t)p){ranges[i]=ranges[--rangeCount];return;}
 }
@@ -116,15 +134,20 @@ void nativeCombineTrace(uint32_t a,uint32_t b,uint32_t l,uint32_t h){
     port_log("COMBINE %08x %08x %08x %08x\n",a,b,l,h);
 }
 void nativeTextureLoadDiagnostic(unsigned tile,unsigned slot,unsigned bits,unsigned x,unsigned y,unsigned w,unsigned h,unsigned stride,unsigned bytes,unsigned pitch){port_log("TILE tile=%u slot=%u bits=%u origin=%u,%u size=%u,%u stride=%u bytes=%u pitch=%u\n",tile,slot,bits,x,y,w,h,stride,bytes,pitch);}
-void native_submit_display_list(void* dl) {
+void nativeRenderDisplayList(void* dl) {
     static int initialized;
     if(!initialized){port_dl_range_register(&__text_start,(uintptr_t)&__end__-(uintptr_t)&__text_start,"native image");nativeRenderInit();initialized=1;}
     nativeRenderBegin();gfx_start_frame();gfx_run(dl);gfx_end_frame();nativeRenderCapture();
 }
+/* Scene arenas are recycled by the game thread; the renderer's texture cache
+ * must not change under a frame that is still being translated. */
+extern void __real_portTextureCacheDeleteRange(const void*,size_t);
+void __wrap_portTextureCacheDeleteRange(const void* p,size_t n){nativeRenderWait();__real_portTextureCacheDeleteRange(p,n);}
 void portResetPackedDisplayListCache(void) {} /* ARM32 Gfx and ROM commands both occupy eight bytes. */
 void portPackedDisplayListCacheDeleteRange(const void*p,size_t n) {}
 uint32_t native_game_width=320,native_game_height=240;
 void GfxSetNativeDimensions(uint32_t w,uint32_t h) {
+    nativeRenderWait();
     if(!((w==320&&h==240)||(w==640&&h==480)))fail("game dimensions",w,0);
     native_game_width=w;native_game_height=h;
 }
@@ -133,6 +156,7 @@ void GfxSetWidescreenFramebufferPersistence(int enabled) {}
 int port_capture_register_fb_for_subrect(const void*p,unsigned n,float x,float y,float w,float h) {
     extern int nativeReadbackPhoto(void*,unsigned,float,float,float,float);
     extern void portTextureCacheDeleteRange(const void*,size_t);
+    nativeRenderIdle(); /* reads back the last frame through citro3d */
     /* Mark any ROM texture words converted before replacing them with pixels. */
     nativeFixTexture(p,n);
     int result=nativeReadbackPhoto((void*)p,n,x,y,w,h);

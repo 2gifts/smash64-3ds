@@ -64,6 +64,7 @@ def main():
     ap.add_argument('--inputs', type=Path, help='Scripted input intervals: begin end buttons x y')
     ap.add_argument('--timeout', type=float, default=600)
     ap.add_argument('--realtime', action='store_true', help='Run at console speed (needed for audio timing)')
+    ap.add_argument('--sync-render', action='store_true', help='Render on the main thread (no core-2 render thread)')
     ap.add_argument('--fixed-audio', action='store_true', help='Use the original fixed 60-tic audio pacing')
     ap.add_argument('--keep', type=Path, help='Copy the log and perf files here')
     ap.add_argument('--data', default='ssb64', help='SD folder of the profile (ssb64-unlocked for the unlocked build)')
@@ -75,7 +76,7 @@ def main():
     for name in ('game.log', 'test-input.txt', *(() if args.keep_save else ('save.bin', 'save.bak'))):
         (data/name).unlink(missing_ok=True)
     shutil.rmtree(data/'perf', ignore_errors=True)
-    (data/'bench.txt').write_text(f'{args.scene} {args.stage} {args.fkind} {args.frames} {args.slider}\n')
+    (data/'bench.txt').write_text(f'{args.scene} {args.stage} {args.fkind} {args.frames} {args.slider} {int(args.fixed_audio)} {int(args.sync_render)}\n')
     if args.inputs:
         shutil.copy2(args.inputs, data/'test-input.txt')
     config = user/'config/qt-config.ini'

@@ -270,6 +270,11 @@ static void gfx_dp_set_combine_mode(''')
     block=pc[a:b].replace('    gfx_dp_set_combine_mode(', '    if(mode==G_CYC_FILL)gfx_dp_set_combine_mode(')
     pc=pc[:a]+block+pc[b:]
     pc=prepare_ui.frontend(pc)
+    # Past this point the frame uses only renderer-owned data (queued draws,
+    # vertex buffer, textures), so the game may continue (render_thread.c).
+    a='    gfx_flush();\n    gfx_rapi->end_frame();'
+    if pc.count(a)!=1:raise ValueError('frame end')
+    pc=pc.replace(a,'    gfx_flush();\n    extern void nativeRenderTranslated(void);\n    nativeRenderTranslated();\n    gfx_rapi->end_frame();')
     (OUT/'gfx_pc.c').write_text(pc)
     header=(SOURCE/'gfx_cc.h').read_text().replace('    CC_LOD\n','    CC_LOD,\n    CC_ONE,\n    CC_PRIMLOD\n')
     (OUT/'gfx_cc.h').write_text(header)
@@ -319,7 +324,7 @@ static void gfx_dp_set_combine_mode(''')
     backend=backend.replace('static bool gfx_citro3d_z_is_from_0_to_1', '#include "native_render_queue.h"\n\nstatic bool gfx_citro3d_z_is_from_0_to_1')
     backend=backend.replace('C3D_TexDelete(&sTexturePool[sCurTex])','nativeRetireTexture(&sTexturePool[sCurTex])')
     backend=backend.replace('C3D_DrawArrays(GPU_TRIANGLES, sBufIdx, buf_vbo_num_tris * 3);','nativeQueueDraw(sBufIdx,buf_vbo_num_tris*3);')
-    backend=backend.replace('C3D_FrameBegin(C3D_FRAME_SYNCDRAW);','uint64_t waitStart=svcGetSystemTick();\n    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);\n    native_perf_render.wait_ms=(svcGetSystemTick()-waitStart)*(1000.0f/SYSCLOCK_ARM11);\n    nativeQueueBegin();')
+    backend=backend.replace('C3D_FrameBegin(C3D_FRAME_SYNCDRAW);','uint64_t waitStart=svcGetSystemTick();\n    /* With a render thread the main loop paces ticks by vblank; translation\n     * starts as soon as the game hands over a frame (render_thread.c). */\n    extern int native_render_async;\n    C3D_FrameBegin(native_render_async?0:C3D_FRAME_SYNCDRAW);\n    native_perf_render.wait_ms=(svcGetSystemTick()-waitStart)*(1000.0f/SYSCLOCK_ARM11);\n    nativeQueueBegin();')
     # The frontend retains the N64 scissor across frames and only sends changes.
     # Resetting this flag silently disabled an unchanged gameplay scissor, letting
     # the background sprite spill into the bottom overscan border.

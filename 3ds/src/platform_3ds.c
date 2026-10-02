@@ -14,6 +14,7 @@
 #include "native_io.h"
 #include "native_controls.h"
 #include "native_audio.h"
+#include "native_render_thread.h"
 
 extern void ssb_game_init(void),ssb_game_tick(void);
 extern void nativeAssetsShutdown(void);
@@ -295,10 +296,11 @@ int main(void) {
 #ifdef SSB_BENCH
     {
         /* scene stage fkind frames slider: -1 keeps a default. */
-        long scene=-1,stage=-1,fkind=-1,frames=0,fixedAudio=0;float slider=-1;
+        long scene=-1,stage=-1,fkind=-1,frames=0,fixedAudio=0,syncRender=0;float slider=-1;
         FILE* f=fopen(SSB_DATA_DIR "/bench.txt","r");
-        if(f){fscanf(f,"%ld %ld %ld %ld %f %ld",&scene,&stage,&fkind,&frames,&slider,&fixedAudio);fclose(f);}
+        if(f){fscanf(f,"%ld %ld %ld %ld %f %ld %ld",&scene,&stage,&fkind,&frames,&slider,&fixedAudio,&syncRender);fclose(f);}
         native_test_fixed_audio_pace=fixedAudio;
+        extern volatile uint32_t native_test_sync_render;native_test_sync_render=syncRender;
         if(scene>=0)ssb_test_start_scene=scene;
         if(stage>=0)ssb_test_single_stage=stage;
         if(fkind>=0){char v[12];snprintf(v,sizeof(v),"%ld",fkind);setenv("SSB64_SPGAME_FKIND",v,1);}
@@ -330,7 +332,7 @@ int main(void) {
         native_perf_render.audio_ms=0;
         native_perf_render.render_total_ms=0;
         native_asset_reads=native_asset_hits=native_asset_bytes=0;
-        uint64_t startTick=svcGetSystemTick();ssb_game_tick();
+        uint64_t startTick=svcGetSystemTick();native_render_tick_start=startTick;ssb_game_tick();
         uint64_t endTick=svcGetSystemTick();
         updateFps(endTick);
         nativeBottomFrame(native_fps_tenths,audioReady);
@@ -343,6 +345,12 @@ int main(void) {
             uint64_t now=svcGetSystemTick();
             port_stats("PACE frame=%u fps=%.2f tick_ms=%.3f\n",ssb_frame_count,
                 60.0*SYSCLOCK_ARM11/(now-frameWindow),1000.0*frameWork/(60.0*SYSCLOCK_ARM11));
+            port_stats("THREAD frame=%u submit_ms=%.3f render_ms=%.3f main_wait_ms=%.3f\n",ssb_frame_count,
+                native_render_submit_ticks*1000.0/SYSCLOCK_ARM11/60,native_render_work_ticks*1000.0/SYSCLOCK_ARM11/60,native_render_block_ticks*1000.0/SYSCLOCK_ARM11/60);
+            native_render_submit_ticks=native_render_work_ticks=native_render_block_ticks=0;
+            {extern unsigned native_fix_calls,native_fix_hits,native_fix_outside,native_fix_invalidations;
+             port_stats("FIX frame=%u calls=%u hits=%u outside=%u invalidations=%u\n",ssb_frame_count,native_fix_calls,native_fix_hits,native_fix_outside,native_fix_invalidations);
+             native_fix_calls=native_fix_hits=native_fix_outside=native_fix_invalidations=0;}
             port_stats("DETAIL frame=%u scene=%u wait_ms=%.3f replay_ms=%.3f render_ms=%.3f audio_ms=%.3f draws=%u binds=%u fog=%u cmd=%u\n",
                 ssb_frame_count,native_perf_game.scene,native_perf_render.wait_ms,native_perf_render.replay_ms,
                 native_perf_render.render_total_ms,native_perf_render.audio_ms,native_perf_render.draw_calls,
@@ -357,7 +365,12 @@ int main(void) {
         }
         if(ssb_test_frame_limit && ssb_frame_count>=ssb_test_frame_limit)break;
 #ifdef SSB_GRAPHICS
-        if(ssb_display_lists==previousLists)gspWaitForVBlank();
+        /* With the render thread, one tick per vblank: wait unless a vblank
+         * already passed during this tick, so a late tick costs that tick's
+         * overrun rather than a whole extra frame. Otherwise frame submission
+         * itself waited for vblank (C3D_FRAME_SYNCDRAW). */
+        if(native_render_async)gspWaitForEvent(GSPGPU_EVENT_VBlank0,false);
+        else if(ssb_display_lists==previousLists)gspWaitForVBlank();
 #else
         gspWaitForVBlank();
 #endif
@@ -383,7 +396,7 @@ int main(void) {
     }
     #ifdef SSB_GRAPHICS
     extern void nativeRenderShutdown(void);
-    nativeRenderShutdown();
+    nativeRenderStop();nativeRenderShutdown();
     #endif
     nativeAssetsShutdown();
     port_stats("EXIT frames=%lu dl=%lu\n",ssb_frame_count,ssb_display_lists);
