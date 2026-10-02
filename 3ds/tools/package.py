@@ -30,7 +30,7 @@ def main():
     dst=OUT/'package'/args.profile;dst.mkdir(parents=True,exist_ok=True)
     shutil.copy2(OUT/built/('ssb64-'+built+'.elf'),dst/'ssb64-package.elf')
     from home_art import prepare
-    prepare(dst)
+    prepare(dst,args.profile)
     with wave.open(str(dst/'silent.wav'),'wb') as wav:
         wav.setparams((2,2,32000,0,'NONE','not compressed'));wav.writeframes(bytes(32000*4))
     bt=tool('bannertool')
