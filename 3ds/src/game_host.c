@@ -26,8 +26,21 @@ volatile int ssb_active_thread;
 volatile uintptr_t ssb_last_display_list;
 static uint64_t timeOffset;
 
-void port_watchdog_note_resume_start(int id) {ssb_active_thread=id;}
-void port_watchdog_note_resume_end(int id) {ssb_active_thread=-1;}
+extern void nativeRenderWait(void);
+/* Time spent in each N64 thread, for the bench log (platform_3ds.c). */
+uint64_t native_thread_ticks[10];
+static uint64_t threadStart;
+/* While the render thread translates a frame, only the scheduler (3), audio
+ * (4) and controller (6) threads may run; the game thread (5) and anything
+ * else first waits for the frame (render_thread.c). */
+void port_watchdog_note_resume_start(int id) {
+    if(id!=3&&id!=4&&id!=6)nativeRenderWait();
+    ssb_active_thread=id;threadStart=native_time_ticks();
+}
+void port_watchdog_note_resume_end(int id) {
+    if(id>=0&&id<10)native_thread_ticks[id]+=native_time_ticks()-threadStart;
+    ssb_active_thread=-1;
+}
 void port_dump_backtrace(void) {port_log("frame=%u thread=%d\n",ssb_frame_count,ssb_active_thread);}
 int port_get_frame_count(void) {return ssb_frame_count;}
 int port_get_last_dl_defer_n(void) {return 1;}
@@ -48,6 +61,7 @@ void ssb_game_init(void) {
 }
 void ssb_game_tick(void) {
     static int lastScene=-1;
+    nativeRenderWait(); /* the vblank below reports the previous frame done */
     port_vi_simulate_vblank();
     osSendMesg(&gSYSchedulerTaskMesgQueue,(OSMesg)1,OS_MESG_NOBLOCK);
     port_resume_service_threads();
@@ -114,9 +128,24 @@ s32 osContInit(OSMesgQueue*q,u8* bits,OSContStatus* status) {
     return 0;
 }
 s32 osContStartReadData(OSMesgQueue*q) {return osSendMesg(q,0,OS_MESG_NOBLOCK);}
+/* Character selection chooses costumes with the four N64 C buttons. The 3DS
+ * has no C buttons in that position, so the D-pad stands in for them there:
+ * up, right, down and left pick costumes 1-4 as C-up/right/down/left did.
+ * The D-pad has no other use on these screens. */
+static u16 costumeButtons(u16 b) {
+    s32 scene=gSCManagerSceneData.scene_curr;
+    if(scene<nSCKindPlayersVS||scene>nSCKind1PBonus2Players)return b;
+    u16 c=0;
+    if(b&U_JPAD){c|=U_CBUTTONS;b&=~L_TRIG;} /* D-pad up is also the taunt (L) */
+    if(b&R_JPAD)c|=R_CBUTTONS;
+    if(b&D_JPAD)c|=D_CBUTTONS;
+    if(b&L_JPAD)c|=L_CBUTTONS;
+    return (b&~(U_JPAD|R_JPAD|D_JPAD|L_JPAD))|c;
+}
 void osContGetReadData(OSContPad* pad) {
     memset(pad,0,sizeof(OSContPad)*4);
     native_read_pad(&pad[0].button,&pad[0].stick_x,&pad[0].stick_y);
+    pad[0].button=costumeButtons(pad[0].button);
     for(int i=1;i<4;i++)pad[i].errno=CONT_NO_RESPONSE_ERROR;
 }
 s32 osMotorInit(OSMesgQueue*q,OSPfs*p,int channel) {return PFS_ERR_NOPACK;}

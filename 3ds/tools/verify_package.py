@@ -2,8 +2,13 @@
 import hashlib
 import json
 import struct
+import argparse
 import subprocess
 from build import OUT,BIN
+from package import PROFILES,TITLE_VERSION,title_id
+# Super Smash Bros. for Nintendo 3DS (JP/US/EU). A port must never install
+# over it or share its save data.
+RETAIL_SMASH_3DS={0x00040000000B8B00,0x00040000000EDF00,0x00040000000EE000}
 
 def u32(data,off):return struct.unpack_from('<I',data,off)[0]
 def align(n,size=64):return (n+size-1)&-size
@@ -30,24 +35,27 @@ def blz(data):
     return bytes(out)
 
 def main():
-    folder=OUT/'package';raw=(folder/'smash64-development.cia').read_bytes()
+    ap=argparse.ArgumentParser();ap.add_argument('--profile',choices=list(PROFILES),default='fresh');args=ap.parse_args()
+    stem=PROFILES[args.profile]['stem']
+    folder=OUT/'package'/args.profile;raw=(folder/(stem+'.cia')).read_bytes()
     hdr,_,_,cert,ticketSize,tmdSize,metaSize,size=struct.unpack_from('<IHHIIIIQ',raw)
     assert hdr==0x2020 and raw[0x20]==0x80
     tp=align(hdr)+align(cert);mp=tp+align(ticketSize);cp=mp+align(tmdSize)
     assert cp+align(size)+metaSize==len(raw)
     ticket=raw[tp:tp+ticketSize];tmd=raw[mp:mp+tmdSize];content=raw[cp:cp+size]
-    title=0x000400000ff64000
+    title=title_id(args.profile)
+    assert title not in RETAIL_SMASH_3DS and 0xF8000<=(title>>8)&0xFFFFF<=0xFFFFF,hex(title)
     assert int.from_bytes(ticket[0x1dc:0x1e4],'big')==title
     assert int.from_bytes(tmd[0x18c:0x194],'big')==title
     title_version=int.from_bytes(tmd[0x1dc:0x1de],'big')
-    assert title_version==8
+    assert title_version==TITLE_VERSION
     assert int.from_bytes(tmd[0x1de:0x1e0],'big')==1
     chunk=tmd[0xb04:0xb34]
     assert int.from_bytes(chunk[8:16],'big')==size and not int.from_bytes(chunk[6:8],'big')&1
     assert sha(content)==chunk[16:48]
     assert sha(tmd[0x204:0xb04])==tmd[0x1e4:0x204]
     assert content[0x100:0x104]==b'NCCH'
-    assert content==(folder/'smash64-development.cxi').read_bytes()
+    assert content==(folder/(stem+'.cxi')).read_bytes()
     for off in (0x108,0x118,0x3c8,0x400,0x800):assert struct.unpack_from('<Q',content,off)[0]==title
     assert content[0x18c]==2 and content[0x18f]&4
     exhdr=content[0x200:0x600];assert sha(exhdr)==content[0x160:0x180]

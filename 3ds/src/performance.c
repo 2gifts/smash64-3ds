@@ -1,4 +1,5 @@
 #include <3ds.h>
+#include "native_profile.h"
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -10,7 +11,7 @@
 #define PERF_ROWS 480
 #define PERF_FILES 8
 #define HIST_BINS 1025
-#define PERF_PATH "sdmc:/3ds/ssb64/perf"
+#define PERF_PATH SSB_DATA_DIR "/perf"
 NativePerfGame native_perf_game;
 NativePerfRender native_perf_render;
 uint32_t native_perf_saved,native_perf_error;

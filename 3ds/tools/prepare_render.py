@@ -13,6 +13,27 @@ def function(text,name,body):
     result,count=re.subn(pattern,lambda m:m[1]+'\n'+body+'\n}',text,flags=re.M|re.S)
     if count!=1:raise ValueError((name,count))
     return result
+PROFILE_HEADER='''
+/* -DSSB_STAGE_PROFILE times these renderer stages (STAGES log). It slows
+ * the bench noticeably, so it is off unless asked for. */
+#ifdef SSB_STAGE_PROFILE
+extern unsigned long long nativeProfTick(void);
+extern void nativeProfAdd(unsigned id,unsigned long long ticks);
+#define NATIVE_PROF(id,call) do{unsigned long long t0_=nativeProfTick();call;nativeProfAdd(id,nativeProfTick()-t0_);}while(0)
+#else
+#define NATIVE_PROF(id,call) call
+#endif
+'''
+def profile(text,functions):
+    """Route each function through a timing shim with the original name."""
+    text=PROFILE_HEADER+text
+    for definition,name,params,args,ident in functions:
+        if text.count(definition)!=1:raise ValueError(name)
+        impl=definition.replace(name+'(',name+'_impl(',1)
+        decl=impl[:impl.index(')')+1]+';'
+        shim='static void '+name+'('+params+'){NATIVE_PROF('+str(ident)+','+name+'_impl('+args+'));}'
+        text=text.replace(definition,decl+'\n'+shim+'\n'+impl)
+    return text
 def main():
     OUT.mkdir(exist_ok=True)
     for name in ['gfx_pc.h','gfx_cc.h','gfx_cc.c','gfx_window_manager_api.h','gfx_rendering_api.h','gfx_screen_config.h','shader.v.pica']:
@@ -270,6 +291,175 @@ static void gfx_dp_set_combine_mode(''')
     block=pc[a:b].replace('    gfx_dp_set_combine_mode(', '    if(mode==G_CYC_FILL)gfx_dp_set_combine_mode(')
     pc=pc[:a]+block+pc[b:]
     pc=prepare_ui.frontend(pc)
+    # Past this point the frame uses only renderer-owned data (queued draws,
+    # vertex buffer, textures), so the game may continue (render_thread.c).
+    a='    gfx_flush();\n    gfx_rapi->end_frame();'
+    if pc.count(a)!=1:raise ValueError('frame end')
+    pc=pc.replace(a,'    gfx_flush();\n    extern void nativeRenderTranslated(void);\n    nativeRenderTranslated();\n    gfx_rapi->end_frame();')
+    # Per-vertex divisions are slow on the ARM11's VFP and the compiler may
+    # not turn them into multiplications. Hoist the texture scales out of the
+    # vertex loop and multiply colors by 1/255 (differences are below 1 ulp).
+    a='''        if(use_texture)for(unsigned unit=0;unit<2;unit++){
+            struct NativeTile* tile=&rdp.tiles[(rdp.first_tile+unit)&7];
+            unsigned ss=tile->shifts,st=tile->shiftt;
+            float su=ss>10?(float)(1u<<(16-ss)):1.0f/(1u<<ss);
+            float sv=st>10?(float)(1u<<(16-st)):1.0f/(1u<<st);
+            float u=v_arr[i]->u*(su/32.0f)-tile->uls/4.0f;
+            float v=v_arr[i]->v*(sv/32.0f)-tile->ult/4.0f;'''
+    b='''        if(use_texture)for(unsigned unit=0;unit<2;unit++){
+            struct NativeTile* tile=&rdp.tiles[(rdp.first_tile+unit)&7];
+            unsigned ss=tile->shifts,st=tile->shiftt;
+            float su=uvScaleS[unit]*32.0f,sv=uvScaleT[unit]*32.0f;
+            float u=v_arr[i]->u*uvScaleS[unit]-uvOffsetS[unit];
+            float v=v_arr[i]->v*uvScaleT[unit]-uvOffsetT[unit];'''
+    if pc.count(a)!=1:raise ValueError('uv scale')
+    pc=pc.replace(a,b)
+    a='''            buf_vbo[buf_vbo_len++]=used_textures[unit]?u/rdp.effective_width[unit]:0;
+            buf_vbo[buf_vbo_len++]=used_textures[unit]?v/rdp.effective_height[unit]:0;'''
+    b='''            buf_vbo[buf_vbo_len++]=used_textures[unit]?u*uvInvW[unit]:0;
+            buf_vbo[buf_vbo_len++]=used_textures[unit]?v*uvInvH[unit]:0;'''
+    if pc.count(a)!=1:raise ValueError('uv divide')
+    pc=pc.replace(a,b)
+    a='''    for (int i = 0; i < 3; i++) {
+
+#ifdef TARGET_N3DS
+        float w = v_arr[i]->w, z = (v_arr[i]->z + w) / -2.0f;'''
+    b='''    float uvScaleS[2],uvScaleT[2],uvOffsetS[2],uvOffsetT[2],uvInvW[2],uvInvH[2];
+    if(use_texture)for(unsigned unit=0;unit<2;unit++){
+        struct NativeTile* tile=&rdp.tiles[(rdp.first_tile+unit)&7];
+        unsigned ss=tile->shifts,st=tile->shiftt;
+        uvScaleS[unit]=(ss>10?(float)(1u<<(16-ss)):1.0f/(1u<<ss))/32.0f;
+        uvScaleT[unit]=(st>10?(float)(1u<<(16-st)):1.0f/(1u<<st))/32.0f;
+        uvOffsetS[unit]=tile->uls/4.0f;uvOffsetT[unit]=tile->ult/4.0f;
+        uvInvW[unit]=used_textures[unit]?1.0f/rdp.effective_width[unit]:0;
+        uvInvH[unit]=used_textures[unit]?1.0f/rdp.effective_height[unit]:0;
+    }
+    for (int i = 0; i < 3; i++) {
+
+#ifdef TARGET_N3DS
+        float w = v_arr[i]->w, z = (v_arr[i]->z + w) / -2.0f;'''
+    if pc.count(a)!=1:raise ValueError('vertex loop')
+    pc=pc.replace(a,b)
+    for ch in 'rgb':
+        a=f'                    buf_vbo[buf_vbo_len++] = color->{ch} / 255.0f;'
+        if pc.count(a)!=1:raise ValueError(a)
+        pc=pc.replace(a,f'                    buf_vbo[buf_vbo_len++] = color->{ch} * (1.0f / 255.0f);')
+    a='                        buf_vbo[buf_vbo_len++] = color->a / 255.0f;'
+    if pc.count(a)!=1:raise ValueError(a)
+    pc=pc.replace(a,'                        buf_vbo[buf_vbo_len++] = color->a * (1.0f / 255.0f);')
+    # Vertex transform: hoist per-call state out of the per-vertex loop. The
+    # build allows any store to alias (-fno-strict-aliasing), so the compiler
+    # reloaded all 16 matrix elements and the light state for every vertex,
+    # and it called the widescreen scale and divided by 127 per light each
+    # time. Scenes with many lit fighters (the Fighting Polygon intro draws
+    # 30 models a frame) spent most of their translation time here.
+    pc=function(pc,'gfx_sp_vertex','''    SUPPORT_CHECK(dest_index+n_vertices <= MAX_VERTICES);
+    nativeFixVertices(vertices,n_vertices);
+    const float m00=rsp.MP_matrix[0][0],m01=rsp.MP_matrix[0][1],m02=rsp.MP_matrix[0][2],m03=rsp.MP_matrix[0][3];
+    const float m10=rsp.MP_matrix[1][0],m11=rsp.MP_matrix[1][1],m12=rsp.MP_matrix[1][2],m13=rsp.MP_matrix[1][3];
+    const float m20=rsp.MP_matrix[2][0],m21=rsp.MP_matrix[2][1],m22=rsp.MP_matrix[2][2],m23=rsp.MP_matrix[2][3];
+    const float m30=rsp.MP_matrix[3][0],m31=rsp.MP_matrix[3][1],m32=rsp.MP_matrix[3][2],m33=rsp.MP_matrix[3][3];
+    const float aspect=nativeDisplayClipScale();
+    const uint32_t geometry=rsp.geometry_mode;
+    const int scaleS=rsp.texture_scaling_factor.s,scaleT=rsp.texture_scaling_factor.t;
+    const bool lighting=(geometry&G_LIGHTING)!=0,texgen=lighting&&(geometry&G_TEXTURE_GEN),fog=(geometry&G_FOG)!=0;
+    /* Directional lights, pre-scaled by 1/127 (the N64 normal range). */
+    int lights=0,ambient[3]={0,0,0};
+    float light[MAX_LIGHTS][3],lightCol[MAX_LIGHTS][3],lookat[2][3];
+    if(lighting){
+        if (rsp.lights_changed) {
+            for (int i = 0; i < rsp.current_num_lights - 1; i++) {
+                calculate_normal_dir(&rsp.current_lights[i], rsp.current_lights_coeffs[i]);
+            }
+            static const Light_t lookat_x = {{0, 0, 0}, 0, {0, 0, 0}, 0, {127, 0, 0}, 0};
+            static const Light_t lookat_y = {{0, 0, 0}, 0, {0, 0, 0}, 0, {0, 127, 0}, 0};
+            calculate_normal_dir((rsp.lookat_valid&1)?&rsp.current_lookat[0]:&lookat_x, rsp.current_lookat_coeffs[0]);
+            calculate_normal_dir((rsp.lookat_valid&2)?&rsp.current_lookat[1]:&lookat_y, rsp.current_lookat_coeffs[1]);
+            rsp.lights_changed = false;
+        }
+        lights=rsp.current_num_lights-1;
+        for(int c=0;c<3;c++)ambient[c]=rsp.current_lights[lights].col[c];
+        for(int i=0;i<lights;i++)for(int c=0;c<3;c++){
+            light[i][c]=rsp.current_lights_coeffs[i][c]*(1.0f/127.0f);
+            lightCol[i][c]=rsp.current_lights[i].col[c];
+        }
+        for(int i=0;i<2;i++)for(int c=0;c<3;c++)lookat[i][c]=rsp.current_lookat_coeffs[i][c]*(1.0f/127.0f);
+    }
+    const bool stereo=gGfx3DEnabled;
+    const float stereoShift=native_stereo_perspective?gSliderLevel*NATIVE_STEREO_SHIFT_MAX:0.0f,stereoFocus=native_stereo_focus_w;
+    const float fogMul=rsp.fog_mul,fogOffset=rsp.fog_offset;
+    for (size_t i = 0; i < n_vertices; i++, dest_index++) {
+        const Vtx_t *v = &vertices[i].v;
+        const Vtx_tn *vn = &vertices[i].n;
+        struct LoadedVertex *d = &rsp.loaded_vertices[dest_index];
+        const float ox=v->ob[0],oy=v->ob[1],oz=v->ob[2];
+        float x = ox * m00 + oy * m10 + oz * m20 + m30;
+        float y = ox * m01 + oy * m11 + oz * m21 + m31;
+        float z = ox * m02 + oy * m12 + oz * m22 + m32;
+        float w = ox * m03 + oy * m13 + oz * m23 + m33;
+        x *= aspect;
+        short U = v->tc[0] * scaleS >> 16;
+        short V = v->tc[1] * scaleT >> 16;
+        if (lighting) {
+            const float nx=vn->n[0],ny=vn->n[1],nz=vn->n[2];
+            int r=ambient[0],g=ambient[1],b=ambient[2];
+            for (int l = 0; l < lights; l++) {
+                float intensity = nx*light[l][0] + ny*light[l][1] + nz*light[l][2];
+                if (intensity > 0.0f) {
+                    r += intensity * lightCol[l][0];
+                    g += intensity * lightCol[l][1];
+                    b += intensity * lightCol[l][2];
+                }
+            }
+            d->color.r = r > 255 ? 255 : r;
+            d->color.g = g > 255 ? 255 : g;
+            d->color.b = b > 255 ? 255 : b;
+            if (texgen) {
+                float dotx = nx*lookat[0][0] + ny*lookat[0][1] + nz*lookat[0][2];
+                float doty = nx*lookat[1][0] + ny*lookat[1][1] + nz*lookat[1][2];
+                U = (int32_t)((dotx + 1.0f) * 0.25f * scaleS);
+                V = (int32_t)((doty + 1.0f) * 0.25f * scaleT);
+            }
+        } else {
+            d->color.r = v->cn[0];
+            d->color.g = v->cn[1];
+            d->color.b = v->cn[2];
+        }
+        d->u = U;
+        d->v = V;
+        /* Trivial clip rejection; with 3D on, each eye shifts x by up to
+         * the stereo offset, so widen the horizontal test accordingly. */
+        float wx=w;
+        if (stereo) wx=w+fabsf(stereoShift*(w-stereoFocus));
+        unsigned clip=0;
+        if (x < -wx) clip |= 1;
+        if (x > wx) clip |= 2;
+        if (y < -w) clip |= 4;
+        if (y > w) clip |= 8;
+        if (z < -w) clip |= 16;
+        if (z > w) clip |= 32;
+        d->clip_rej = clip;
+        d->x = x;
+        d->y = y;
+        d->z = z;
+        d->w = w;
+        if (fog) {
+            float fw = fabsf(w) < 0.001f ? 0.001f : w;
+            float winv = 1.0f / fw;
+            if (winv < 0.0f) winv = 32767.0f;
+            float fog_z = z * winv * fogMul + fogOffset;
+            if (fog_z < 0) fog_z = 0;
+            if (fog_z > 255) fog_z = 255;
+            d->color.a = fog_z; // Use alpha variable to store fog factor
+        } else {
+            d->color.a = v->cn[3];
+        }
+    }''')
+    # Bench timing shims; kept off per-triangle paths, where they would distort it.
+    pc=profile(pc,[('static void gfx_sp_vertex(size_t n_vertices, size_t dest_index, const Vtx *vertices) {','gfx_sp_vertex','size_t a,size_t b,const Vtx* c','a,b,c',0),
+                   ('static void gfx_flush(void) {','gfx_flush','void','',2),
+                   ('static void import_texture(int tile){','import_texture','int a','a',3),
+                   ('static void gfx_sp_matrix(uint8_t parameters, const int32_t *addr) {','gfx_sp_matrix','uint8_t a,const int32_t* b','a,b',4)])
     (OUT/'gfx_pc.c').write_text(pc)
     header=(SOURCE/'gfx_cc.h').read_text().replace('    CC_LOD\n','    CC_LOD,\n    CC_ONE,\n    CC_PRIMLOD\n')
     (OUT/'gfx_cc.h').write_text(header)
@@ -319,7 +509,7 @@ static void gfx_dp_set_combine_mode(''')
     backend=backend.replace('static bool gfx_citro3d_z_is_from_0_to_1', '#include "native_render_queue.h"\n\nstatic bool gfx_citro3d_z_is_from_0_to_1')
     backend=backend.replace('C3D_TexDelete(&sTexturePool[sCurTex])','nativeRetireTexture(&sTexturePool[sCurTex])')
     backend=backend.replace('C3D_DrawArrays(GPU_TRIANGLES, sBufIdx, buf_vbo_num_tris * 3);','nativeQueueDraw(sBufIdx,buf_vbo_num_tris*3);')
-    backend=backend.replace('C3D_FrameBegin(C3D_FRAME_SYNCDRAW);','uint64_t waitStart=svcGetSystemTick();\n    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);\n    native_perf_render.wait_ms=(svcGetSystemTick()-waitStart)*(1000.0f/SYSCLOCK_ARM11);\n    nativeQueueBegin();')
+    backend=backend.replace('C3D_FrameBegin(C3D_FRAME_SYNCDRAW);','uint64_t waitStart=svcGetSystemTick();\n    /* With a render thread the main loop paces ticks by vblank; translation\n     * starts as soon as the game hands over a frame (render_thread.c). */\n    extern int native_render_async;\n    C3D_FrameBegin(native_render_async?0:C3D_FRAME_SYNCDRAW);\n    native_perf_render.wait_ms=(svcGetSystemTick()-waitStart)*(1000.0f/SYSCLOCK_ARM11);\n    nativeQueueBegin();')
     # The frontend retains the N64 scissor across frames and only sends changes.
     # Resetting this flag silently disabled an unchanged gameplay scissor, letting
     # the background sprite spill into the bottom overscan border.
@@ -348,6 +538,7 @@ static void gfx_dp_set_combine_mode(''')
     backend=backend.replace('    if (sShaderProgramPool[sCurShader].cc_features.opt_fog)\n        C3D_TexEnvColor(C3D_GetTexEnv(2), vec4ToU32Color(buf_vbo[hasTex ? 6 : 4], buf_vbo[hasTex ? 7 : 5], buf_vbo[hasTex ? 8 : 6], buf_vbo[hasTex ? 9 : 7]));','')
     backend=prepare_texture.backend(backend)
     backend=prepare_tmem.backend(backend)
+    backend=profile(backend,[('static void gfx_citro3d_end_frame(void)\n{','gfx_citro3d_end_frame','void','',5)])
     (OUT/'gfx_citro3d.c').write_text(backend)
     shader=(SOURCE/'shader.v.pica').read_text().replace('.fvec projection[4], modelView[4]','.fvec projection[4], modelView[4], eye')
     shader=shader.replace('    mov r0, inpos','    mov r0, inpos\n    mul r2.x, eye.x, inpos.w\n    add r0.x, r2.x, inpos.x\n    add r0.x, eye.y, r0.x')

@@ -882,6 +882,26 @@ void scManagerRunLoop(sb32 arg)
 		continue;
 	}
 	lbBackupIsSramValid();
+#ifdef PORT
+	{
+		/* 3DS "All Unlocked" build: every fighter, Mushroom Kingdom, Item
+		 * Switch and Sound Test from the first boot. Records and options in
+		 * the save still update normally. */
+		extern int native_profile_unlocked;
+		LBBackupData *backup = &gSCManagerBackupData;
+
+		if (native_profile_unlocked &&
+		    (((backup->unlock_mask & LBBACKUP_UNLOCK_MASK_ALL) != LBBACKUP_UNLOCK_MASK_ALL) ||
+		     ((backup->fighter_mask & LBBACKUP_CHARACTER_MASK_ALL) != LBBACKUP_CHARACTER_MASK_ALL) ||
+		     ((backup->ground_mask & LBBACKUP_GROUND_MASK_ALL) != LBBACKUP_GROUND_MASK_ALL)))
+		{
+			backup->unlock_mask |= LBBACKUP_UNLOCK_MASK_ALL;
+			backup->fighter_mask |= LBBACKUP_CHARACTER_MASK_ALL;
+			backup->ground_mask |= LBBACKUP_GROUND_MASK_ALL;
+			lbBackupWrite();
+		}
+	}
+#endif
 	lbBackupApplyOptions();
 
 #ifndef PORT

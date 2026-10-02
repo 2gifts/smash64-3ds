@@ -5,21 +5,26 @@ import sys
 import shutil
 import struct
 import argparse
+import os
 from build import ROOT,UPSTREAM,ARM,SDK,BIN,OUT,ARCH,GCC_VERSION,tool,run,game_flags
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--render',action='store_true');ap.add_argument('--release',action='store_true');args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--render',action='store_true');ap.add_argument('--release',action='store_true');ap.add_argument('--bench',action='store_true');ap.add_argument('--profile',choices=['fresh','unlocked'],default='fresh');args=ap.parse_args()
+    if args.bench:args.release=True
     if args.release:args.render=True
     from prepare_bottom_assets import main as prepare_bottom
     prepare_bottom()
     from prepare_reloc_index import main as prepare_index
     prepare_index()
-    variant='release' if args.release else 'graphics' if args.render else 'bringup'
+    variant='bench' if args.bench else 'release' if args.release else 'graphics' if args.render else 'bringup'
+    if args.profile=='unlocked':variant+='-unlocked'
+    profile=['-DSSB_PROFILE_UNLOCKED','-DSSB_DATA_DIR="sdmc:/3ds/ssb64-unlocked"'] if args.profile=='unlocked' else []
     out=OUT/variant;out.mkdir(parents=True,exist_ok=True)
     objects=[]
     sources=[ROOT/'src/game_host.c',ROOT/'src/vanilla_policy.c',ROOT/'src/coroutine.c',ROOT/'src/platform_3ds.c',ROOT/'src/performance.c',ROOT/'src/save_layout_check.c',ROOT/'src/stereo_camera.c']
     sources += [ROOT/'src/display_settings.c',ROOT/'src/io_worker.c']
-    sources += [ROOT/'src/control_settings.c',ROOT/'src/control_input.c',ROOT/'src/control_game.c']
+    if args.bench:sources.append(ROOT/'src/bench_wraps.c')
+    sources += [ROOT/'src/audio_pace.c',ROOT/'src/control_settings.c',ROOT/'src/control_input.c',ROOT/'src/control_game.c']
     sources += [ROOT/'src/bottom_game.c',ROOT/'src/bottom_draw.c',ROOT/'src/bottom_3ds.c',ROOT/'src/wallpaper.c']
     if args.render:
         from prepare_render import main as prepare
@@ -27,7 +32,7 @@ def main():
         run([tool('picasso'),'-o',out/'shader.shbin',ROOT/'renderer/shader.v.pica'])
         shader=(out/'shader.shbin').read_bytes()
         shader_c=out/'shader.c';shader_c.write_text('const unsigned char shader_shbin[] __attribute__((aligned(4)))={'+','.join(map(str,shader))+'};\nconst unsigned shader_shbin_size='+str(len(shader))+';\n')
-        sources += [ROOT/'src/render_bridge.c',ROOT/'src/render_device.c',ROOT/'renderer/gfx_pc.c',ROOT/'renderer/gfx_cc.c',ROOT/'renderer/gfx_citro3d.c',shader_c]
+        sources += [ROOT/'src/render_thread.c',ROOT/'src/render_bridge.c',ROOT/'src/render_device.c',ROOT/'renderer/gfx_pc.c',ROOT/'renderer/gfx_cc.c',ROOT/'renderer/gfx_citro3d.c',shader_c]
     else:sources.append(ROOT/'src/bringup_render.c')
     for src in sources:
         obj=out/(src.stem+'.o')
@@ -42,6 +47,9 @@ def main():
         flags += ['-I'+str(ROOT/'include'),'-I'+str(ROOT/'renderer')]
         if args.render:flags += ['-DTARGET_N3DS','-DSSB_GRAPHICS']
         if args.release:flags += ['-DSSB_RELEASE']
+        if args.bench:flags += ['-DSSB_BENCH']
+        flags += profile
+        flags += os.environ.get('SSB_EXTRA_CFLAGS','').split()  # e.g. -DSSB_STAGE_PROFILE
         run([BIN/'clang.exe',*flags,'-c',src,'-o',obj]);objects.append(obj)
     asm=(UPSTREAM/'port/coroutine_armv7.S').read_text().replace('.fpu    vfpv3-d16','.fpu    vfp')
     (out/'coroutine_arm.S').write_text(asm)
@@ -66,7 +74,8 @@ def main():
          gcc/'crtend.o',gcc/'crtn.o','-o',elf]
     cmd+=['--wrap=abort','--wrap=ftParamUpdatePlayerBattleStats','--wrap=lbCommonDrawSObjAttr']
     cmd+=['--wrap=ftCommonAttackLw4CheckInterruptSquat']
-    if args.render:cmd+=['--wrap=portResetStructFixups','--wrap=portEvictStructFixupsInRange']
+    if args.bench:cmd+=['--wrap=lbRelocGetForceExternHeapFile','--wrap=portRelocByteSwapBlob','--wrap=port_aobj_register_halfswapped_range','--wrap=port_aobj_event32_unhalfswap_stream','--wrap=port_aobj_unhalfswap_visit']
+    if args.render:cmd+=['--wrap=portResetStructFixups','--wrap=portEvictStructFixupsInRange','--wrap=portTextureCacheDeleteRange']
     p=subprocess.run(list(map(str,cmd)),capture_output=True,text=True)
     (out/'link.log').write_text(p.stdout+p.stderr)
     if p.returncode:
@@ -78,7 +87,7 @@ def main():
             if not dst.exists() or dst.stat().st_mtime<src.stat().st_mtime:shutil.copy2(src,dst)
     metadata=bytearray(0x36c0);metadata[:4]=b'SMDH'
     for lang in range(16):
-        labels=[(0,'Smash 64' if args.release else 'SSB64 development'),(0x80,'Native New Nintendo 3DS port' if args.release else 'Engine and renderer validation build'),(0x180,'Decompilation and port contributors')]
+        labels=[(0,('Smash 64: All Unlocked' if args.profile=='unlocked' else 'Smash 64') if args.release else 'SSB64 development'),(0x80,'Native New Nintendo 3DS port' if args.release else 'Engine and renderer validation build'),(0x180,'Decompilation and port contributors')]
         for offset,text in labels:
             text=text.encode('utf-16le');base=8+lang*0x200+offset
             metadata[base:base+len(text)]=text

@@ -1,0 +1,38 @@
+Smash 64 for New 3DS - CIA builder
+==================================
+
+This makes Smash 64 for New 3DS, including CIA files to install on your 3DS,
+from YOUR OWN copy of Super Smash Bros. for Nintendo 64. Nothing from the
+game is included in this download.
+
+What you need
+-------------
+- A Windows 10 or 11 PC (64-bit) with an internet connection
+- About 3 GB of free disk space
+- Your Super Smash Bros. ROM: the US version (revision 1.0), 16 MB.
+  .z64, .n64 and .v64 files all work. If it is in a .zip or .7z, extract it.
+- A New 3DS, New 3DS XL or New 2DS XL with custom firmware and FBI
+
+How to build
+------------
+1. Extract this whole zip first (right-click it > Extract All...).
+2. Double-click "Build Smash 64 CIA.bat" (or drag your ROM onto it).
+   If Windows says "Windows protected your PC", click "More info", then
+   "Run anyway".
+3. Choose your ROM when asked, then wait. The first build takes 10 to 30
+   minutes. Leave the window open.
+4. When it finishes, a folder opens with your files. Follow
+   "What to do next.txt" in that folder.
+
+You get two CIA files and can install one or both. They keep separate saves:
+  Smash64-New3DS.cia           Smash 64 (unlock things by playing)
+  Smash64-New3DS-Unlocked.cia  Smash 64: All Unlocked
+
+If the build stops, run it again: it continues where it stopped.
+
+The builder works in C:\Smash64Build (or another drive with enough space;
+the window shows where). You can delete that folder once your files are on
+the SD card, or keep it to make future updates faster.
+
+Help: https://github.com/2gifts/smash64-3ds/issues
+Please attach build-log.txt from the Smash64Build folder.

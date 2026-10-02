@@ -9,7 +9,7 @@ def main():
     for p in data.glob('*.csv'):p.unlink()
     source=(ROOT/'src/performance.c').read_text().replace('#include <3ds.h>', '#include <stdint.h>\n#define SYSCLOCK_ARM11 268123480\nstatic unsigned linearSpaceFree(void){return 24*1024*1024;}')
     source=source.replace('#include <sys/stat.h>','').replace('mkdir(PERF_PATH,0777);','(void)0;')
-    source=source.replace('#define PERF_PATH "sdmc:/3ds/ssb64/perf"','#define PERF_PATH "'+data.relative_to(ROOT).as_posix()+'"')
+    source=source.replace('#define PERF_PATH SSB_DATA_DIR "/perf"','#define PERF_PATH "'+data.relative_to(ROOT).as_posix()+'"')
     source+='''
 int nativeIoSubmit(NativeIoWrite fn,const void* data,size_t n,unsigned key){fn(data);return 0;}
 '''
