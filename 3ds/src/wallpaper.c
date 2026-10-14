@@ -10,15 +10,22 @@ void __wrap_lbCommonDrawSObjAttr(GObj* gobj){
     if(match&&gobj==sGRWallpaperGObj){
         SObj* s=SObjGetStruct(gobj);
         float sx=s->sprite.scalex,sy=s->sprite.scaley,x=s->pos.x,y=s->pos.y;
+        u16 attr=s->sprite.attr;
         /* The original backdrop is a photograph-like 300x220 sprite, not
          * world geometry. Cover the viewport with uniform scaling and crop
-         * excess height in wide, rather than stretching mountains/clouds. */
-        if(native_widescreen){s->sprite.scaley*=11.0f/9.0f;s->pos.y=120+(y-120)*(11.0f/9.0f);}
+         * excess height in wide, rather than stretching mountains/clouds.
+         * Static backdrops (Yoshi's Story, bonus stages) draw in fast-copy
+         * mode, which ignores scaling: the backdrop moved up without growing
+         * and left the bottom of the screen black. Draw them scaled. */
+        if(native_widescreen){
+            s->sprite.scaley*=11.0f/9.0f;s->pos.y=120+(y-120)*(11.0f/9.0f);
+            s->sprite.attr&=~SP_FASTCOPY;
+        }
         Gfx* marker=gSYTaskmanDLHeads[0]++;
         gSPNoOp(marker);marker->words.w1=NATIVE_BACKDROP_BEGIN;
         __real_lbCommonDrawSObjAttr(gobj);
         marker=gSYTaskmanDLHeads[0]++;
         gSPNoOp(marker);marker->words.w1=NATIVE_BACKDROP_END;
-        s->sprite.scalex=sx;s->sprite.scaley=sy;s->pos.x=x;s->pos.y=y;
+        s->sprite.scalex=sx;s->sprite.scaley=sy;s->pos.x=x;s->pos.y=y;s->sprite.attr=attr;
     }else __real_lbCommonDrawSObjAttr(gobj);
 }

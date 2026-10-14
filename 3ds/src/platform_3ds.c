@@ -353,6 +353,7 @@ int main(void) {
             {extern uint64_t native_evict_ticks[3];double e=1000.0/SYSCLOCK_ARM11/60;
              port_stats("EVICTS frame=%u cache=%.3f tracker=%.3f textures=%.3f\n",ssb_frame_count,native_evict_ticks[0]*e,native_evict_ticks[1]*e,native_evict_ticks[2]*e);
              memset(native_evict_ticks,0,sizeof(native_evict_ticks));}
+            {extern uint64_t native_fix_miss_ticks;port_stats("FIXMISSES frame=%u ms=%.3f\n",ssb_frame_count,native_fix_miss_ticks*1000.0/SYSCLOCK_ARM11/60);native_fix_miss_ticks=0;}
             {extern uint64_t native_load_ticks[4];double e=1000.0/SYSCLOCK_ARM11/60;
              port_stats("LOADS frame=%u force_load=%.3f byteswap=%.3f halfswap_register=%.3f\n",ssb_frame_count,native_load_ticks[0]*e,native_load_ticks[1]*e,native_load_ticks[2]*e);
              memset(native_load_ticks,0,sizeof(native_load_ticks));}

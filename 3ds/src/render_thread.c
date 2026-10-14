@@ -98,7 +98,7 @@ void nativeRenderStop(void) {
     threadJoin(renderThread,U64_MAX);threadFree(renderThread);renderThread=NULL;
 }
 /* Renderer stage timing for bench builds (tools/prepare_render.py profile). */
-uint64_t native_prof_ticks[8];
+uint64_t native_prof_ticks[8],native_fix_miss_ticks;
 unsigned long long nativeProfTick(void) {return svcGetSystemTick();}
 void nativeProfAdd(unsigned id,unsigned long long ticks) {if(id<8)native_prof_ticks[id]+=ticks;}
 /* The audio thread synthesizes once per tic. With a render thread, let it

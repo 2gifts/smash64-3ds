@@ -79,12 +79,24 @@ void __wrap_portEvictStructFixupsInRange(const void* p,size_t n){
     EVICT_TIMED(0,invalidateFixupRange(p,n));
     EVICT_TIMED(1,__real_portEvictStructFixupsInRange(p,n));
 }
+/* Keyed by address alone, remembering the longest run fixed there: fixups
+ * are idempotent per word, so any request inside a fixed run is done.
+ * Large backgrounds are loaded in strips that ask for growing prefixes of
+ * one buffer every frame (the opening movie's room: 4 KiB to 43 KiB); keyed
+ * by address and length those collided and were redone each frame. */
 static void fixAsset(const void* p,unsigned count,unsigned kind){
-    unsigned hash=(((uintptr_t)p>>4)^(count*2654435761u))&4095;
+    unsigned hash=(unsigned)(((uintptr_t)p>>2)*2654435761u)>>20;
     struct Fixup* f=&fixed[kind][hash];
     native_fix_calls++;
-    if(f->epoch==fixupEpoch&&f->address==p&&f->count==count){native_fix_hits++;return;}
+    if(f->epoch==fixupEpoch&&f->address==p&&count<=f->count){native_fix_hits++;return;}
+#ifdef SSB_BENCH
+    {extern unsigned long long nativeProfTick(void);extern uint64_t native_fix_miss_ticks;
+     unsigned long long t0_=nativeProfTick();
+     if(kind)portRelocFixupVertexAtRuntime(p,count);else portRelocFixupTextureAtRuntime(p,count);
+     native_fix_miss_ticks+=nativeProfTick()-t0_;}
+#else
     if(kind)portRelocFixupVertexAtRuntime(p,count);else portRelocFixupTextureAtRuntime(p,count);
+#endif
     uintptr_t base;size_t size;
     if(portRelocFindContainingFile(p,&base,&size)){
         unsigned listed=f->listed;
@@ -150,7 +162,10 @@ void nativeUnknownOpcode(unsigned opcode,const void*p) {fail("unsupported opcode
 void nativeRenderAssertion(const char* expression,int line,const void* p) {port_log("Renderer assertion line=%d expression=%s\n",line,expression);fail("assert",line,p);}
 /* Runs for every triangle, so it has its own switch rather than following
  * general logging (which bench builds enable). */
-volatile uint32_t native_test_combine_trace;
+#ifndef SSB_COMBINE_TRACE_DEFAULT
+#define SSB_COMBINE_TRACE_DEFAULT 0
+#endif
+volatile uint32_t native_test_combine_trace=SSB_COMBINE_TRACE_DEFAULT;
 void nativeCombineTrace(uint32_t a,uint32_t b,uint32_t l,uint32_t h){
     if(!native_test_combine_trace)return;
     static uint32_t seen[256][4];static unsigned count;
