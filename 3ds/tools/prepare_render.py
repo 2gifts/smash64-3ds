@@ -24,6 +24,91 @@ extern void nativeProfAdd(unsigned id,unsigned long long ticks);
 #define NATIVE_PROF(id,call) call
 #endif
 '''
+def general_combiner(backend):
+    """Give the backend the general N64 combine, (a - b) * c + d.
+
+    The original only set up a stage for three shapes (single input, a*c,
+    and the mix (a-b)*c+b); anything else left the stage passing through the
+    previous one, so Yoshi's shield egg, (shade - env) * texel0, drew black.
+    The subtraction runs in the program's own stage and the multiply-add in
+    stage 4, between the second cycle (2, 3) and fog (5). PICA stages clamp
+    at 0 as the N64's final result does when d is 0."""
+    def sub(a,b):
+        nonlocal backend
+        if backend.count(a)!=1:raise ValueError(a[:60])
+        backend=backend.replace(a,b)
+    sub('    C3D_TexEnv texenv1;\n','    C3D_TexEnv texenv1;\n    C3D_TexEnv texenv2;\n    bool general;\n')
+    sub('static void update_tex_env(struct ShaderProgram *prg, bool swap_input)\n{','''/* Inputs on the vertex are PRIMARY_COLOR in either stage. The per-draw
+ * constant input reaches the program's stage as PREVIOUS (stage 0 holds it);
+ * stage 4 gets a copy as its own constant (renderTwoColorTris). */
+static void nativeGeneralCombine(struct ShaderProgram* prg,C3D_TexEnvMode mode,const uint8_t* c,bool swap)
+{
+    static unsigned warned;
+    bool alpha=mode==C3D_Alpha;
+    GPU_TEVSRC s[2];
+    for(int k=0;k<2;k++){GPU_TEVSRC v=getTevSrc(c[2+k],swap);s[k]=v==GPU_PREVIOUS?GPU_CONSTANT:v;}
+    bool constantClash=c[3]!=SHADER_0&&s[0]==GPU_CONSTANT&&s[1]==GPU_CONSTANT&&c[2]!=c[3];
+    for(int i=0;i<4;i++)if(c[i]==SHADER_INPUT_3||c[i]==SHADER_INPUT_4)constantClash=true;
+    if(constantClash){
+        if(warned++<8)port_log("Unsupported general combine %u %u %u %u\\n",c[0],c[1],c[2],c[3]);
+        return;
+    }
+    C3D_TexEnvFunc(&prg->texenv0,mode,GPU_SUBTRACT);
+    C3D_TexEnvSrc(&prg->texenv0,mode,getTevSrc(c[0],swap),getTevSrc(c[1],swap),0);
+    if(!alpha)C3D_TexEnvOpRgb(&prg->texenv0,c[0]==SHADER_TEXEL0A?GPU_TEVOP_RGB_SRC_ALPHA:GPU_TEVOP_RGB_SRC_COLOR,
+        c[1]==SHADER_TEXEL0A?GPU_TEVOP_RGB_SRC_ALPHA:GPU_TEVOP_RGB_SRC_COLOR,GPU_TEVOP_RGB_SRC_COLOR);
+    if(c[3]==SHADER_0){
+        C3D_TexEnvFunc(&prg->texenv2,mode,GPU_MODULATE);
+        C3D_TexEnvSrc(&prg->texenv2,mode,GPU_PREVIOUS,s[0],0);
+    }else{
+        C3D_TexEnvFunc(&prg->texenv2,mode,GPU_MULTIPLY_ADD);
+        C3D_TexEnvSrc(&prg->texenv2,mode,GPU_PREVIOUS,s[0],s[1]);
+    }
+    if(!alpha)C3D_TexEnvOpRgb(&prg->texenv2,GPU_TEVOP_RGB_SRC_COLOR,
+        c[2]==SHADER_TEXEL0A?GPU_TEVOP_RGB_SRC_ALPHA:GPU_TEVOP_RGB_SRC_COLOR,
+        c[3]==SHADER_TEXEL0A?GPU_TEVOP_RGB_SRC_ALPHA:GPU_TEVOP_RGB_SRC_COLOR);
+    prg->general=true;
+    port_log("GENERAL combine %u %u %u %u mode=%u\\n",c[0],c[1],c[2],c[3],(unsigned)mode);
+}
+
+static void update_tex_env(struct ShaderProgram *prg, bool swap_input)
+{
+    C3D_TexEnvInit(&prg->texenv2);
+    prg->general=false;''')
+    # RGB-first path: RGB, then alpha; then the combined RGBA path.
+    sub('''                prg->cc_features.c[0][2] == SHADER_TEXEL0A ? GPU_TEVOP_RGB_SRC_ALPHA : GPU_TEVOP_RGB_SRC_COLOR);
+        }
+        // now Alpha''','''                prg->cc_features.c[0][2] == SHADER_TEXEL0A ? GPU_TEVOP_RGB_SRC_ALPHA : GPU_TEVOP_RGB_SRC_COLOR);
+        }
+        else nativeGeneralCombine(prg,C3D_RGB,prg->cc_features.c[0],swap_input);
+        // now Alpha''')
+    sub('''                                          getTevSrc(prg->cc_features.c[1][2], swap_input));
+        }
+    }
+    else
+    {''','''                                          getTevSrc(prg->cc_features.c[1][2], swap_input));
+        }
+        else nativeGeneralCombine(prg,C3D_Alpha,prg->cc_features.c[1],swap_input);
+    }
+    else
+    {''')
+    sub('''                prg->cc_features.c[0][2] == SHADER_TEXEL0A ? GPU_TEVOP_RGB_SRC_ALPHA : GPU_TEVOP_RGB_SRC_COLOR);
+        }
+    }
+    if (!prg->cc_features.opt_alpha)''','''                prg->cc_features.c[0][2] == SHADER_TEXEL0A ? GPU_TEVOP_RGB_SRC_ALPHA : GPU_TEVOP_RGB_SRC_COLOR);
+        }
+        else nativeGeneralCombine(prg,C3D_Both,prg->cc_features.c[0],swap_input);
+    }
+    if (!prg->cc_features.opt_alpha)''')
+    sub('''        C3D_TexEnvInit(C3D_GetTexEnv(1));
+    }''','''        C3D_TexEnvInit(C3D_GetTexEnv(1));
+    }
+    if (prg->general) C3D_SetTexEnv(4, &prg->texenv2);
+    else C3D_TexEnvInit(C3D_GetTexEnv(4));''')
+    sub('''    C3D_TexEnvColor(C3D_GetTexEnv(0), color1Constant ? firstColor1 : firstColor0);''','''    C3D_TexEnvColor(C3D_GetTexEnv(0), color1Constant ? firstColor1 : firstColor0);
+    if (sShaderProgramPool[sCurShader].general) C3D_TexEnvColor(C3D_GetTexEnv(4), color1Constant ? firstColor1 : firstColor0);''')
+    return backend
+
 def profile(text,functions):
     """Route each function through a timing shim with the original name."""
     text=PROFILE_HEADER+text
@@ -536,6 +621,7 @@ static void gfx_dp_set_combine_mode(''')
     a=backend.index('void gfx_citro3d_set_clear_color(');b=backend.index('struct GfxRenderingAPI gfx_citro3d_api',a)
     backend=backend[:a]+backend[b:]
     backend=backend.replace('    if (sShaderProgramPool[sCurShader].cc_features.opt_fog)\n        C3D_TexEnvColor(C3D_GetTexEnv(2), vec4ToU32Color(buf_vbo[hasTex ? 6 : 4], buf_vbo[hasTex ? 7 : 5], buf_vbo[hasTex ? 8 : 6], buf_vbo[hasTex ? 9 : 7]));','')
+    backend=general_combiner(backend)
     backend=prepare_texture.backend(backend)
     backend=prepare_tmem.backend(backend)
     backend=profile(backend,[('static void gfx_citro3d_end_frame(void)\n{','gfx_citro3d_end_frame','void','',5)])
